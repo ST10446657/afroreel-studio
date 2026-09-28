@@ -9,8 +9,8 @@ type RequestBody = { language?: 'zu' | 'en'; title?: string; caption?: string; v
 export async function POST(request: Request) {
   if (!request.headers.get('oai-authenticated-user-id')) return json({ error: 'Sign in to create a schedule.' }, 401);
   const body = await request.json().catch(() => null) as RequestBody | null;
-  if (!body?.language || !['zu', 'en'].includes(body.language) || !body.title?.trim() || !body.videoUrl || !body.scheduledAt) return json({ error: 'Language, title, HTTPS video URL, and scheduled time are required.' }, 400);
-  if (!/^https:\/\//i.test(body.videoUrl)) return json({ error: 'The video must be available at a public HTTPS URL.' }, 400);
+  if (!body?.language || !['zu', 'en'].includes(body.language) || !body.title?.trim() || !body.scheduledAt) return json({ error: 'Language, title, and scheduled time are required.' }, 400);
+  if (body.videoUrl && !/^https:\/\//i.test(body.videoUrl)) return json({ error: 'The video must be available at a public HTTPS URL.' }, 400);
   const platforms = (body.platforms ?? ['Facebook', 'Instagram', 'TikTok', 'YouTube']).filter(p => ['Facebook', 'Instagram', 'TikTok', 'YouTube'].includes(p));
   if (!platforms.length) return json({ error: 'Choose at least one platform.' }, 400);
   const connected = body.language === 'zu' ? {
@@ -19,5 +19,5 @@ export async function POST(request: Request) {
     TikTok: Boolean(cfg.ZERNIO_ZU_API_KEY && cfg.ZERNIO_ZU_TIKTOK_ACCOUNT_ID),
     YouTube: Boolean(cfg.ZERNIO_ZU_API_KEY && cfg.ZERNIO_ZU_YOUTUBE_ACCOUNT_ID),
   } : { Facebook: false, Instagram: false, TikTok: false, YouTube: false };
-  return json({ mode: 'dry_run', willPublish: false, language: body.language, title: body.title.trim(), scheduledAt: body.scheduledAt, platforms: platforms.map(platform => ({ platform, connected: connected[platform as keyof typeof connected], status: connected[platform as keyof typeof connected] ? 'ready' : 'not_connected' })), message: 'Schedule plan validated. Publishing is disabled until explicitly enabled.' });
+  return json({ mode: 'dry_run', willPublish: false, language: body.language, title: body.title.trim(), scheduledAt: body.scheduledAt, videoAttached: Boolean(body.videoUrl), platforms: platforms.map(platform => ({ platform, connected: connected[platform as keyof typeof connected], status: connected[platform as keyof typeof connected] ? (body.videoUrl ? 'ready' : 'awaiting_video') : 'not_connected' })), message: 'Schedule plan validated. Publishing is disabled until explicitly enabled.' });
 }
