@@ -44,12 +44,19 @@ export async function GET(request:Request){
    ]);
    let metricMessage:string|null=null;
    const posts=await Promise.all((feed.data??[]).map(async post=>{
-    let views:number|null=null;
-    const videoId=post.attachments?.data?.[0]?.target?.id;
+   let views:number|null=null;
+   const videoId=post.attachments?.data?.[0]?.target?.id;
+    let postMetricError:string|null=null;
     try{
-     if(videoId){const metrics=await fetchGraph<{data?:Insight[]}>(`${videoId}/video_insights?metric=total_video_views&period=lifetime`,pageContext.pageToken);views=insight(metrics.data,'total_video_views');}
-     if(views===null){const metrics=await fetchGraph<{data?:Insight[]}>(`${post.id}/insights?metric=post_video_views&period=lifetime`,pageContext.pageToken);views=insight(metrics.data,'post_video_views');}
-    }catch(error){metricMessage??=error instanceof Error?error.message:'Meta did not return Facebook video views.';}
+     const metrics=await fetchGraph<{data?:Insight[]}>(`${post.id}/insights?metric=post_video_views&period=lifetime`,pageContext.pageToken);
+     views=insight(metrics.data,'post_video_views');
+    }catch(error){postMetricError=error instanceof Error?error.message:'Meta did not return Facebook post video views.';}
+    if(views===null&&videoId){
+     try{
+      const metrics=await fetchGraph<{data?:Insight[]}>(`${videoId}/video_insights?metric=total_video_views&period=lifetime`,pageContext.pageToken);
+      views=insight(metrics.data,'total_video_views');
+     }catch(error){metricMessage??=postMetricError??(error instanceof Error?error.message:'Meta did not return Facebook video views.');}
+    }else if(views===null&&postMetricError){metricMessage??=postMetricError;}
     return {id:post.id,title:post.message||'Facebook post',publishedAt:post.created_time??null,url:post.permalink_url??null,views,likes:num(post.reactions?.summary?.total_count),comments:num(post.comments?.summary?.total_count),shares:num(post.shares?.count),syncStatus:'synced'};
    }));
    return {platform:'Facebook',status:'ready',message:metricMessage,username:account.name??null,followers:num(account.fan_count),updatedAt:new Date().toISOString(),posts};
