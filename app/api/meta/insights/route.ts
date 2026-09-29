@@ -22,20 +22,25 @@ export async function GET(request:Request){
  ]});
  const graph=cfg.META_GRAPH_VERSION??'v21.0';
  const base=`https://graph.facebook.com/${graph}`;
- const auth={Authorization:`Bearer ${token}`};
  const since=Math.floor((Date.now()-(days-1)*86400000)/1000);
  const until=Math.floor(Date.now()/1000);
- const fetchGraph=async<T>(path:string)=>{
-  const response=await fetch(`${base}/${path}`,{headers:auth,signal:AbortSignal.timeout(15000)});
+ const fetchGraph=async<T>(path:string,accessToken=token)=>{
+  const response=await fetch(`${base}/${path}`,{headers:{Authorization:`Bearer ${accessToken}`},signal:AbortSignal.timeout(15000)});
   const body=await response.json() as T&GraphError;
   if(!response.ok)throw new Error(body.error?.message||`Meta returned HTTP ${response.status}.`);
   return body;
  };
+ const pageContext=await (async()=>{
+  try{
+   const page=await fetchGraph<{id:string;name?:string;access_token?:string;instagram_business_account?:{id:string;username?:string}}>(`${pageId}?fields=id,name,access_token,instagram_business_account{id,username}`);
+   return {pageToken:page.access_token??token,instagramId:page.instagram_business_account?.id??configuredIgId};
+  }catch{return {pageToken:token,instagramId:configuredIgId};}
+ })();
  const facebook=async()=>{
   try{
    const [account,feed]=await Promise.all([
-    fetchGraph<{id:string;name?:string;fan_count?:number}>(`${pageId}?fields=id,name,fan_count`),
-    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number};insights?:{data?:Insight[]}}[]}>(`${pageId}/published_posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares,insights.metric(post_video_views)`),
+    fetchGraph<{id:string;name?:string;fan_count?:number}>(`${pageId}?fields=id,name,fan_count`,pageContext.pageToken),
+    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number};insights?:{data?:Insight[]}}[]}>(`${pageId}/published_posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares,insights.metric(post_video_views)`,pageContext.pageToken),
    ]);
    const posts=(feed.data??[]).map(post=>({id:post.id,title:post.message||'Facebook post',publishedAt:post.created_time??null,url:post.permalink_url??null,views:insight(post.insights?.data,'post_video_views'),likes:num(post.reactions?.summary?.total_count),comments:num(post.comments?.summary?.total_count),shares:num(post.shares?.count),syncStatus:'synced'}));
    return {platform:'Facebook',status:'ready',message:null,username:account.name??null,followers:num(account.fan_count),updatedAt:new Date().toISOString(),posts};
@@ -43,8 +48,8 @@ export async function GET(request:Request){
  };
  const instagram=async()=>{
   try{
-   let igId=configuredIgId;
-   if(businessId){
+   let igId=pageContext.instagramId;
+   if(igId===configuredIgId&&businessId){
     const owned=await fetchGraph<{data?:{id:string;username?:string}[]}>(`${businessId}/owned_instagram_accounts?limit=100&fields=id,username`);
     const candidate=(owned.data??[]).find(account=>account.id===configuredIgId)||(owned.data??[])[0];
     if(candidate?.id)igId=candidate.id;
