@@ -13,11 +13,12 @@ export async function POST(request: Request) {
   if (body.videoUrl && !/^https:\/\//i.test(body.videoUrl)) return json({ error: 'The video must be available at a public HTTPS URL.' }, 400);
   const platforms = (body.platforms ?? ['Facebook', 'Instagram', 'TikTok', 'YouTube']).filter(p => ['Facebook', 'Instagram', 'TikTok', 'YouTube'].includes(p));
   if (!platforms.length) return json({ error: 'Choose at least one platform.' }, 400);
-  const connected = body.language === 'zu' ? {
-    Facebook: Boolean(cfg.META_SYSTEM_USER_TOKEN && cfg.META_PAGE_ID),
-    Instagram: Boolean(cfg.META_SYSTEM_USER_TOKEN && cfg.META_IG_USER_ID),
-    TikTok: Boolean(cfg.ZERNIO_ZU_API_KEY && cfg.ZERNIO_ZU_TIKTOK_ACCOUNT_ID),
-    YouTube: Boolean(cfg.ZERNIO_ZU_API_KEY && cfg.ZERNIO_ZU_YOUTUBE_ACCOUNT_ID),
-  } : { Facebook: false, Instagram: false, TikTok: false, YouTube: false };
+  const meta=body.language==='zu'?'META':'META_EN',zernio=body.language==='zu'?'ZERNIO_ZU':'ZERNIO_EN';
+  const connected = {
+    Facebook:Boolean(cfg[`${meta}_SYSTEM_USER_TOKEN`]&&cfg[`${meta}_PAGE_ID`]),
+    Instagram:Boolean(cfg[`${meta}_SYSTEM_USER_TOKEN`]&&cfg[`${meta}_IG_USER_ID`]),
+    TikTok:Boolean(cfg[`${zernio}_API_KEY`]&&cfg[`${zernio}_TIKTOK_ACCOUNT_ID`]),
+    YouTube:Boolean(cfg[`${zernio}_API_KEY`]&&cfg[`${zernio}_YOUTUBE_ACCOUNT_ID`]),
+  };
   return json({ mode: 'dry_run', willPublish: false, language: body.language, title: body.title.trim(), scheduledAt: body.scheduledAt, videoAttached: Boolean(body.videoUrl), platforms: platforms.map(platform => ({ platform, connected: connected[platform as keyof typeof connected], status: connected[platform as keyof typeof connected] ? (body.videoUrl ? 'ready' : 'awaiting_video') : 'not_connected' })), message: 'Schedule plan validated. Publishing is disabled until explicitly enabled.' });
 }

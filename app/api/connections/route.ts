@@ -18,7 +18,9 @@ export async function GET(request: Request) {
     { platform: 'TikTok', apiPlatform: 'tiktok', id: config[`${prefix}_TIKTOK_ACCOUNT_ID`] },
     { platform: 'YouTube', apiPlatform: 'youtube', id: config[`${prefix}_YOUTUBE_ACCOUNT_ID`] },
   ];
-  const base = [{ platform: 'Facebook', provider: 'Meta', status: 'not_connected', username: null }, { platform: 'Instagram', provider: 'Meta', status: 'not_connected', username: null }];
+  const metaPrefix=language==='zu'?'META':'META_EN';
+  const metaReady=Boolean(config[`${metaPrefix}_SYSTEM_USER_TOKEN`]&&config[`${metaPrefix}_PAGE_ID`]&&config[`${metaPrefix}_IG_USER_ID`]);
+  const base = [{ platform: 'Facebook', provider: 'Meta', status: metaReady?'connected':'not_connected', username: null }, { platform: 'Instagram', provider: 'Meta', status: metaReady?'connected':'not_connected', username: null }];
   if (!key || !profileId) return json({ language, checkedAt: null, accounts: [...base, ...expected.map(a => ({ platform: a.platform, provider: 'Zernio', status: 'not_connected', username: null }))] });
   try {
     const response = await fetch(`https://zernio.com/api/v1/accounts?profileId=${encodeURIComponent(profileId)}`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(12000) });
