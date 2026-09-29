@@ -1,17 +1,56 @@
-import { env } from 'cloudflare:workers';
-export const dynamic = 'force-dynamic';
-const cfg = env as unknown as Record<string, string | undefined>;
-const graph = cfg.META_GRAPH_VERSION ?? 'v21.0';
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
-export async function GET(request: Request) {
-  if (!request.headers.get('oai-authenticated-user-id')) return json({ error: 'Sign in to view insights.' }, 401);
-  if (!cfg.META_SYSTEM_USER_TOKEN || !cfg.META_PAGE_ID || !cfg.META_IG_USER_ID) return json({ error: 'Meta is not configured.' }, 503);
-  const metrics = 'impressions,reach,likes,comments,saved,shares,profile_views';
-  const headers = { Authorization: `Bearer ${cfg.META_SYSTEM_USER_TOKEN}` };
-  const [fb, ig] = await Promise.all([
-    fetch(`https://graph.facebook.com/${graph}/${cfg.META_PAGE_ID}/insights?metric=page_impressions,page_post_engagements,page_fans&period=day`, { headers }),
-    fetch(`https://graph.facebook.com/${graph}/${cfg.META_IG_USER_ID}/insights?metric=${metrics}&period=day`, { headers }),
-  ]);
-  if (!fb.ok || !ig.ok) return json({ error: 'Meta insights are unavailable; advanced access may be required.' }, 502);
-  return json({ facebook: await fb.json(), instagram: await ig.json(), source: 'meta', fetchedAt: new Date().toISOString() });
+import {env} from 'cloudflare:workers';
+export const dynamic='force-dynamic';
+const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
+const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
+const num=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)?value:null;
+type GraphError={error?:{message?:string;code?:number}};
+type Insight={name?:string;values?:{value?:unknown}[]};
+const insight=(rows:Insight[]|undefined,name:string)=>num(rows?.find(row=>row.name===name)?.values?.[0]?.value);
+
+export async function GET(request:Request){
+ if(!request.headers.get('oai-authenticated-user-id'))return json({error:'Sign in to view Meta analytics.'},401);
+ const query=new URL(request.url).searchParams;
+ const language=query.get('language');
+ const days=Number(query.get('days')??30);
+ if(!['zu','en'].includes(language??'')||![7,30,90].includes(days))return json({error:'Choose a language and a 7, 30 or 90 day period.'},400);
+ const cfg=env as unknown as Record<string,string|undefined>;
+ const prefix=language==='en'?'META_EN':'META';
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`],pageId=cfg[`${prefix}_PAGE_ID`],igId=cfg[`${prefix}_IG_USER_ID`];
+ if(!token||!pageId||!igId)return json({language,channels:[
+  {platform:'Facebook',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},
+  {platform:'Instagram',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},
+ ]});
+ const graph=cfg.META_GRAPH_VERSION??'v21.0';
+ const base=`https://graph.facebook.com/${graph}`;
+ const auth={Authorization:`Bearer ${token}`};
+ const since=Math.floor((Date.now()-(days-1)*86400000)/1000);
+ const until=Math.floor(Date.now()/1000);
+ const fetchGraph=async<T>(path:string)=>{
+  const response=await fetch(`${base}/${path}`,{headers:auth,signal:AbortSignal.timeout(15000)});
+  const body=await response.json() as T&GraphError;
+  if(!response.ok)throw new Error(body.error?.message||`Meta returned HTTP ${response.status}.`);
+  return body;
+ };
+ const facebook=async()=>{
+  try{
+   const [account,feed]=await Promise.all([
+    fetchGraph<{id:string;name?:string;fan_count?:number}>(`${pageId}?fields=id,name,fan_count`),
+    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number};insights?:{data?:Insight[]}}[]}>(`${pageId}/published_posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares,insights.metric(post_video_views)`),
+   ]);
+   const posts=(feed.data??[]).map(post=>({id:post.id,title:post.message||'Facebook post',publishedAt:post.created_time??null,url:post.permalink_url??null,views:insight(post.insights?.data,'post_video_views'),likes:num(post.reactions?.summary?.total_count),comments:num(post.comments?.summary?.total_count),shares:num(post.shares?.count),syncStatus:'synced'}));
+   return {platform:'Facebook',status:'ready',message:null,username:account.name??null,followers:num(account.fan_count),updatedAt:new Date().toISOString(),posts};
+  }catch(error){return {platform:'Facebook',status:'unavailable',message:error instanceof Error?error.message:'Meta could not load Facebook analytics.',username:null,followers:null,posts:[]};}
+ };
+ const instagram=async()=>{
+  try{
+   const [account,media]=await Promise.all([
+    fetchGraph<{id:string;username?:string;followers_count?:number}>(`${igId}?fields=id,username,followers_count`),
+    fetchGraph<{data?:{id:string;caption?:string;timestamp?:string;permalink?:string;like_count?:number;comments_count?:number;insights?:{data?:Insight[]}}[]}>(`${igId}/media?since=${since}&until=${until}&limit=100&fields=id,caption,timestamp,permalink,like_count,comments_count,insights.metric(views,shares,saved)`),
+   ]);
+   const posts=(media.data??[]).map(post=>({id:post.id,title:post.caption||'Instagram post',publishedAt:post.timestamp??null,url:post.permalink??null,views:insight(post.insights?.data,'views'),likes:num(post.like_count),comments:num(post.comments_count),shares:insight(post.insights?.data,'shares'),saves:insight(post.insights?.data,'saved'),syncStatus:'synced'}));
+   return {platform:'Instagram',status:'ready',message:null,username:account.username??null,followers:num(account.followers_count),updatedAt:new Date().toISOString(),posts};
+  }catch(error){return {platform:'Instagram',status:'unavailable',message:error instanceof Error?error.message:'Meta could not load Instagram analytics.',username:null,followers:null,posts:[]};}
+ };
+ const channels=await Promise.all([facebook(),instagram()]);
+ return json({language,fromDate:new Date(since*1000).toISOString().slice(0,10),toDate:new Date(until*1000).toISOString().slice(0,10),checkedAt:new Date().toISOString(),channels});
 }
