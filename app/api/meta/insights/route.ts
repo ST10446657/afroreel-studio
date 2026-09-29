@@ -40,9 +40,13 @@ export async function GET(request:Request){
   try{
    const [account,feed]=await Promise.all([
     fetchGraph<{id:string;name?:string;fan_count?:number}>(`${pageId}?fields=id,name,fan_count`,pageContext.pageToken),
-    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number};insights?:{data?:Insight[]}}[]}>(`${pageId}/posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares,insights.metric(post_video_views)`,pageContext.pageToken),
+    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number}}[]}>(`${pageId}/posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares`,pageContext.pageToken),
    ]);
-   const posts=(feed.data??[]).map(post=>({id:post.id,title:post.message||'Facebook post',publishedAt:post.created_time??null,url:post.permalink_url??null,views:insight(post.insights?.data,'post_video_views'),likes:num(post.reactions?.summary?.total_count),comments:num(post.comments?.summary?.total_count),shares:num(post.shares?.count),syncStatus:'synced'}));
+   const posts=await Promise.all((feed.data??[]).map(async post=>{
+    let views:number|null=null;
+    try{const metrics=await fetchGraph<{data?:Insight[]}>(`${post.id}/insights?metric=post_video_views&period=lifetime`,pageContext.pageToken);views=insight(metrics.data,'post_video_views');}catch{}
+    return {id:post.id,title:post.message||'Facebook post',publishedAt:post.created_time??null,url:post.permalink_url??null,views,likes:num(post.reactions?.summary?.total_count),comments:num(post.comments?.summary?.total_count),shares:num(post.shares?.count),syncStatus:'synced'};
+   }));
    return {platform:'Facebook',status:'ready',message:null,username:account.name??null,followers:num(account.fan_count),updatedAt:new Date().toISOString(),posts};
   }catch(error){return {platform:'Facebook',status:'unavailable',message:error instanceof Error?error.message:'Meta could not load Facebook analytics.',username:null,followers:null,posts:[]};}
  };
