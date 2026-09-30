@@ -81,7 +81,8 @@ async function zernio(post:PublishPost,platform:'TikTok'|'YouTube'){
  const response=await fetch('https://zernio.com/api/v1/posts',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)});
  const body=await responseBody(response);
  if(!response.ok)throw Error(providerError(body,`${platform} rejected the post.`));
- const id=body._id??body.id;
+ const post=body.post as Record<string,unknown>|undefined;
+ const id=body._id??body.id??post?._id??post?.id;
  if(typeof id!=='string')throw Error(`${platform} did not return a post ID.`);
  return id;
 }
