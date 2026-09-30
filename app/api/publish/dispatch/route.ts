@@ -1,5 +1,6 @@
 import {dispatchPost,loadPost,queuePost,validatePost} from '@/lib/dispatch';
 export const dynamic='force-dynamic';
+// Publishing resolves shared workspace schedules by post ID.
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
 type Body={id?:string;action?:'validate'|'schedule'|'publish_now'|'retry'};
