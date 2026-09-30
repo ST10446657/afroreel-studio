@@ -87,7 +87,10 @@ export default function Home(){
   useEffect(()=>{
     const context=(document as Document & {modelContext?:{registerTool:(tool:unknown,options:unknown)=>void|Promise<void>}}).modelContext;if(!context?.registerTool)return;
     const lifecycle=new AbortController();
-    try{Promise.resolve(context.registerTool({name:'navigate_studio',description:'Open Scheduling or Analytics in AfroReel Studio.',inputSchema:{type:'object',properties:{section:{type:'string',enum:['Scheduling','Analytics','Analysis']}},required:['section'],additionalProperties:false},execute(input:unknown){const value=(input as {section?:unknown})?.section;if(value!=='Scheduling'&&value!=='Analytics'&&value!=='Analysis')throw new Error('Choose Scheduling or Analytics.');flushSync(()=>setSection(value==='Analysis'?'Analytics':value));return {section:value,publishingEnabled:false}}},{signal:lifecycle.signal})).catch(()=>{})}catch{}
+    try{
+      Promise.resolve(context.registerTool({name:'navigate_studio',description:'Open Scheduling or Analytics in AfroReel Studio.',inputSchema:{type:'object',properties:{section:{type:'string',enum:['Scheduling','Analytics','Analysis']}},required:['section'],additionalProperties:false},execute(input:unknown){const value=(input as {section?:unknown})?.section;if(value!=='Scheduling'&&value!=='Analytics'&&value!=='Analysis')throw new Error('Choose Scheduling or Analytics.');flushSync(()=>setSection(value==='Analysis'?'Analytics':value));return {section:value,publishingEnabled:false}}},{signal:lifecycle.signal})).catch(()=>{});
+      Promise.resolve(context.registerTool({name:'diagnose_meta',description:'Run a read-only Meta connection diagnostic for an AfroReel workspace.',inputSchema:{type:'object',properties:{language:{type:'string',enum:['zu','en']}},required:['language'],additionalProperties:false},async execute(input:unknown){const value=(input as {language?:unknown})?.language;if(value!=='zu'&&value!=='en')throw new Error('Choose zu or en.');const response=await fetch(`/api/meta/diagnostics?language=${value}`,{cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error((result as {error?:string}).error??'Meta diagnostics failed.');return result;}},{signal:lifecycle.signal})).catch(()=>{});
+    }catch{}
     return()=>lifecycle.abort();
   },[]);
 
