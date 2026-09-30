@@ -40,7 +40,7 @@ export async function GET(request:Request){
   try{
    const [account,feed]=await Promise.all([
     fetchGraph<{id:string;name?:string;fan_count?:number}>(`${pageId}?fields=id,name,fan_count`,pageContext.pageToken),
-    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number};attachments?:{data?:{target?:{id?:string};media_type?:string}[]}}[]}>(`${pageId}/posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares,attachments.limit(1){target,media_type}`,pageContext.pageToken),
+    fetchGraph<{data?:{id:string;message?:string;created_time?:string;permalink_url?:string;reactions?:{summary?:{total_count?:number}};comments?:{summary?:{total_count?:number}};shares?:{count?:number};attachments?:{data?:{target?:{id?:string};media_type?:string}[]}}[]}>(`${pageId}/published_posts?since=${since}&until=${until}&limit=100&fields=id,message,created_time,permalink_url,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares,attachments.limit(1){target,media_type}`,pageContext.pageToken),
    ]);
    let metricMessage:string|null=null;
    const posts=await Promise.all((feed.data??[]).map(async post=>{
