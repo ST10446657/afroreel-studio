@@ -13,7 +13,7 @@ const validUrl=(value:string|null|undefined)=>!value||/^https:\/\//i.test(value)
 export async function GET(request:Request){
  const owner=user(request);if(!owner)return json({error:'Sign in to view scheduled posts.'},401);
  try{
-  const rows=await db().prepare(`SELECT p.id,p.language,p.title,p.caption,p.video_url AS videoUrl,p.scheduled_at AS scheduledAt,p.timezone,p.status,p.created_at AS createdAt,p.updated_at AS updatedAt,t.platform,t.status AS targetStatus,t.external_id AS externalId,t.error FROM posts p JOIN post_targets t ON t.post_id=p.id WHERE p.owner_id=? ORDER BY p.scheduled_at ASC,t.platform ASC`).bind(owner).all() as {results?:Record<string,unknown>[]};
+  const rows=await db().prepare(`SELECT p.id,p.language,p.title,p.caption,p.video_url AS videoUrl,p.scheduled_at AS scheduledAt,p.timezone,p.status,p.created_at AS createdAt,p.updated_at AS updatedAt,t.platform,t.status AS targetStatus,t.external_id AS externalId,t.error FROM posts p JOIN post_targets t ON t.post_id=p.id WHERE p.owner_id IN (?, 'automation') ORDER BY p.scheduled_at ASC,t.platform ASC`).bind(owner).all() as {results?:Record<string,unknown>[]};
   const posts=new Map<string,Record<string,unknown>&{targets:{platform:unknown;status:unknown;externalId:unknown;error:unknown}[]}>();
   for(const row of rows.results??[]){const id=String(row.id);if(!posts.has(id))posts.set(id,{id,language:row.language,title:row.title,caption:row.caption,videoUrl:row.videoUrl,scheduledAt:row.scheduledAt,timezone:row.timezone,status:row.status,createdAt:row.createdAt,updatedAt:row.updatedAt,targets:[]});posts.get(id)!.targets.push({platform:row.platform,status:row.targetStatus,externalId:row.externalId,error:row.error});}
   return json({posts:[...posts.values()]});
