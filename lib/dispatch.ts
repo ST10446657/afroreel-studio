@@ -7,7 +7,7 @@ type D1={prepare:(sql:string)=>Statement};
 const db=()=>{const value=(env as unknown as {DB?:D1}).DB;if(!value)throw Error('Post storage is unavailable.');return value};
 
 export async function loadPost(id:string,owner?:string){
- const where=owner?'p.id=? AND p.owner_id=?':'p.id=?';
+ const where=owner?"p.id=? AND p.owner_id IN (?, 'automation')":'p.id=?';
  const args=owner?[id,owner]:[id];
  const rows=await db().prepare(`SELECT p.id,p.language,p.title,p.caption,p.video_url AS videoUrl,p.scheduled_at AS scheduledAt,t.platform,t.status AS targetStatus,t.external_id AS externalId FROM posts p JOIN post_targets t ON t.post_id=p.id WHERE ${where} ORDER BY t.platform`).bind(...args).all();
  if(!rows.results?.length)return null;

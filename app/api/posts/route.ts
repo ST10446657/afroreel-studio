@@ -39,10 +39,10 @@ export async function PATCH(request:Request){
  const platforms=[...new Set((body?.platforms??[]).filter((p):p is Platform=>allowed.includes(p)))];
  if(!body?.id||!body.language||!body.title?.trim()||!body.scheduledAt||!platforms.length)return json({error:'Post id, title, schedule, language and platforms are required.'},400);
  if(!validUrl(body.videoUrl))return json({error:'The video must use a public HTTPS URL.'},400);
- const now=Date.now(),status=body.status==='ready'&&body.videoUrl?'ready':body.status==='paused'?'paused':'draft';
+  const now=Date.now(),status=body.status==='ready'&&body.videoUrl?'ready':body.status==='paused'?'paused':'draft';
  try{
-  const database=db();const owned=await database.prepare(`SELECT id,status FROM posts WHERE id=? AND owner_id=?`).bind(body.id,owner).first() as {id?:string;status?:string}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing')return json({error:'Published posts cannot be edited.'},409);
-  await database.batch([database.prepare(`UPDATE posts SET language=?,title=?,caption=?,video_url=?,scheduled_at=?,status=?,updated_at=? WHERE id=? AND owner_id=?`).bind(body.language,body.title.trim(),body.caption?.trim()??'',body.videoUrl?.trim()||null,body.scheduledAt,status,now,body.id,owner),database.prepare(`DELETE FROM post_targets WHERE post_id=?`).bind(body.id),...platforms.map(platform=>database.prepare(`INSERT INTO post_targets (post_id,platform,status,updated_at) VALUES (?,?,?,?)`).bind(body.id,platform,status==='paused'?'draft':status,now))]);
+  const database=db();const owned=await database.prepare(`SELECT id,status FROM posts WHERE id=? AND owner_id IN (?, 'automation')`).bind(body.id,owner).first() as {id?:string;status?:string}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing')return json({error:'Published posts cannot be edited.'},409);
+  await database.batch([database.prepare(`UPDATE posts SET language=?,title=?,caption=?,video_url=?,scheduled_at=?,status=?,updated_at=? WHERE id=? AND owner_id IN (?, 'automation')`).bind(body.language,body.title.trim(),body.caption?.trim()??'',body.videoUrl?.trim()||null,body.scheduledAt,status,now,body.id,owner),database.prepare(`DELETE FROM post_targets WHERE post_id=?`).bind(body.id),...platforms.map(platform=>database.prepare(`INSERT INTO post_targets (post_id,platform,status,updated_at) VALUES (?,?,?,?)`).bind(body.id,platform,status==='paused'?'draft':status,now))]);
   return json({id:body.id,status,message:'Post updated. Nothing was published.'});
  }catch{return json({error:'The post could not be updated.'},503);}
 }
@@ -50,5 +50,5 @@ export async function PATCH(request:Request){
 export async function DELETE(request:Request){
  const owner=user(request);if(!owner)return json({error:'Sign in to delete posts.'},401);
  const id=new URL(request.url).searchParams.get('id');if(!id)return json({error:'Post id is required.'},400);
- try{const owned=await db().prepare(`SELECT status FROM posts WHERE id=? AND owner_id=?`).bind(id,owner).first() as {status?:string}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing')return json({error:'Published posts cannot be deleted from the schedule.'},409);await db().prepare(`DELETE FROM posts WHERE id=? AND owner_id=?`).bind(id,owner).run();return json({deleted:true});}catch{return json({error:'The post could not be deleted.'},503);}
+ try{const owned=await db().prepare(`SELECT status FROM posts WHERE id=? AND owner_id IN (?, 'automation')`).bind(id,owner).first() as {status?:string}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing')return json({error:'Published posts cannot be deleted from the schedule.'},409);await db().prepare(`DELETE FROM posts WHERE id=? AND owner_id IN (?, 'automation')`).bind(id,owner).run();return json({deleted:true});}catch{return json({error:'The post could not be deleted.'},503);}
 }
