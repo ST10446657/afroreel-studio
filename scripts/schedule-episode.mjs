@@ -21,8 +21,12 @@ const title=String(args.get('title')||`She Grew Up a Servant in Her Own Home · 
 const payload={language,episode,title,caption,videoUrl:String(videoUrl),scheduledAt,platforms};
 console.log(JSON.stringify({...payload,caption:`${caption.slice(0,100)}${caption.length>100?'…':''}`},null,2));
 if(!args.get('confirm')){console.log('\nDry run only. Add --confirm to create this schedule.');process.exit(0)}
+const mediaCheck=await fetch(String(videoUrl),{method:'HEAD',redirect:'follow'});
+const mediaType=mediaCheck.headers.get('content-type')??'';
+if(!mediaCheck.ok||mediaType.includes('text/html'))throw Error('The video URL is not publicly downloadable. In Drive, set this file to Anyone with the link before scheduling.');
 const endpoint=process.env.AFROREEL_STUDIO_URL||'https://afroreel-studio.mamulis101.chatgpt.site';
 const key=process.env.STUDIO_AUTOMATION_KEY;if(!key)throw Error('STUDIO_AUTOMATION_KEY is missing from the environment.');
-const response=await fetch(`${endpoint}/api/automation/schedule`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key},body:JSON.stringify(payload)});
+const bypass=process.env.SITES_BYPASS_TOKEN;if(!bypass)throw Error('SITES_BYPASS_TOKEN is missing from the environment.');
+const response=await fetch(`${endpoint}/api/automation/schedule`,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'OAI-Sites-Authorization':`Bearer ${bypass}`},body:JSON.stringify(payload)});
 const result=await response.json();if(!response.ok)throw Error(result.error||`Schedule request failed (${response.status}).`);
 console.log(`\n${result.message}`);console.log(`ID: ${result.id}`);console.log(`Status: ${result.status}`);
