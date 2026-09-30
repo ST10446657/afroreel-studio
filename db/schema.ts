@@ -9,7 +9,7 @@ export const posts=sqliteTable('posts',{
  videoUrl:text('video_url'),
  scheduledAt:text('scheduled_at').notNull(),
  timezone:text('timezone').notNull().default('Africa/Johannesburg'),
- status:text('status',{enum:['draft','ready','paused','publishing','published','failed']}).notNull().default('draft'),
+ status:text('status',{enum:['draft','ready','paused','queued','publishing','published','failed']}).notNull().default('draft'),
  createdAt:integer('created_at',{mode:'timestamp_ms'}).notNull(),
  updatedAt:integer('updated_at',{mode:'timestamp_ms'}).notNull(),
 },table=>[index('posts_owner_schedule_idx').on(table.ownerId,table.scheduledAt)]);
