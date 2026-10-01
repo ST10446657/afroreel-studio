@@ -15,7 +15,7 @@ export async function GET(request:Request){
  if(!['zu','en'].includes(language??'')||![7,30,90].includes(days))return json({error:'Choose a language and a 7, 30 or 90 day period.'},400);
  const cfg=env as unknown as Record<string,string|undefined>;
  const prefix=language==='en'?'META_EN':'META';
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`],pageId=cfg[`${prefix}_PAGE_ID`],configuredIgId=cfg[`${prefix}_IG_USER_ID`],businessId=cfg[`${prefix}_BUSINESS_ID`];
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`],pageId=cfg[`${prefix}_PAGE_ID`],configuredIgId=cfg[`${prefix}_IG_USER_ID`];
  if(!token||!pageId||!configuredIgId)return json({language,channels:[
   {platform:'Facebook',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},
   {platform:'Instagram',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},
@@ -64,12 +64,9 @@ export async function GET(request:Request){
  };
  const instagram=async()=>{
   try{
-   let igId=pageContext.instagramId;
-   if(igId===configuredIgId&&businessId){
-    const owned=await fetchGraph<{data?:{id:string;username?:string}[]}>(`${businessId}/owned_instagram_accounts?limit=100&fields=id,username`);
-    const candidate=(owned.data??[]).find(account=>account.id===configuredIgId)||(owned.data??[])[0];
-    if(candidate?.id)igId=candidate.id;
-   }
+   // The Page connection is authoritative. A business portfolio ID is not an
+   // Instagram Graph object and must never be used as an account fallback.
+   const igId=pageContext.instagramId;
    const [account,media]=await Promise.all([
     fetchGraph<{id:string;username?:string;followers_count?:number}>(`${igId}?fields=id,username,followers_count`),
     fetchGraph<{data?:{id:string;caption?:string;timestamp?:string;permalink?:string;like_count?:number;comments_count?:number;insights?:{data?:Insight[]}}[]}>(`${igId}/media?since=${since}&until=${until}&limit=100&fields=id,caption,timestamp,permalink,like_count,comments_count,insights.metric(views,shares,saved)`),
