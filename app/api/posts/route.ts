@@ -16,7 +16,14 @@ export async function GET(request:Request){
   const rows=await db().prepare(`SELECT p.id,p.language,p.title,p.caption,p.video_url AS videoUrl,p.scheduled_at AS scheduledAt,p.timezone,p.status,p.created_at AS createdAt,p.updated_at AS updatedAt,t.platform,t.status AS targetStatus,t.external_id AS externalId,t.error FROM posts p JOIN post_targets t ON t.post_id=p.id ORDER BY p.scheduled_at ASC,t.platform ASC`).all() as {results?:Record<string,unknown>[]};
   const posts=new Map<string,Record<string,unknown>&{targets:{platform:unknown;status:unknown;externalId:unknown;error:unknown}[]}>();
   for(const row of rows.results??[]){const id=String(row.id);if(!posts.has(id))posts.set(id,{id,language:row.language,title:row.title,caption:row.caption,videoUrl:row.videoUrl,scheduledAt:row.scheduledAt,timezone:row.timezone,status:row.status,createdAt:row.createdAt,updatedAt:row.updatedAt,targets:[]});posts.get(id)!.targets.push({platform:row.platform,status:row.targetStatus,externalId:row.externalId,error:row.error});}
-  return json({posts:[...posts.values()]});
+  const result=[...posts.values()].map(post=>{
+   const targets=post.targets as {status:unknown}[];
+   const statuses=targets.map(target=>String(target.status));
+   const published=statuses.filter(status=>status==='published').length;
+   const derived=published&&published<statuses.length?'partially_published':published===statuses.length?'published':statuses.includes('publishing')?'publishing':statuses.includes('queued')?'queued':statuses.every(status=>status==='failed')?'failed':post.status;
+   return {...post,status:derived};
+  });
+  return json({posts:result});
  }catch{return json({error:'Scheduled posts could not be loaded.'},503);}
 }
 
@@ -61,5 +68,5 @@ export async function PATCH(request:Request){
 export async function DELETE(request:Request){
  const owner=user(request);if(!owner)return json({error:'Sign in to delete posts.'},401);
  const id=new URL(request.url).searchParams.get('id');if(!id)return json({error:'Post id is required.'},400);
- try{const owned=await db().prepare(`SELECT status FROM posts WHERE id=? AND owner_id IN (?, 'automation')`).bind(id,owner).first() as {status?:string}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing')return json({error:'Published posts cannot be deleted from the schedule.'},409);await db().prepare(`DELETE FROM posts WHERE id=? AND owner_id IN (?, 'automation')`).bind(id,owner).run();return json({deleted:true});}catch{return json({error:'The post could not be deleted.'},503);}
+ try{const owned=await db().prepare(`SELECT p.status,(SELECT COUNT(*) FROM post_targets t WHERE t.post_id=p.id AND t.status IN ('published','publishing')) AS lockedTargets FROM posts p WHERE p.id=? AND p.owner_id IN (?, 'automation')`).bind(id,owner).first() as {status?:string;lockedTargets?:number}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing'||Number(owned.lockedTargets))return json({error:'Posts with published targets cannot be deleted from the schedule.'},409);await db().prepare(`DELETE FROM posts WHERE id=? AND owner_id IN (?, 'automation')`).bind(id,owner).run();return json({deleted:true});}catch{return json({error:'The post could not be deleted.'},503);}
 }
