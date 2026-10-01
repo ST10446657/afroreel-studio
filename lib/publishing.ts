@@ -11,8 +11,11 @@ const graphBase=()=>`https://graph.facebook.com/${config().META_GRAPH_VERSION??'
 const cleanError=(value:unknown)=>value instanceof Error?value.message.replace(/EA[A-Za-z0-9]+/g,'[redacted]').slice(0,300):'The provider rejected this post.';
 const responseBody=async(response:Response)=>await response.json().catch(()=>({})) as Record<string,unknown>;
 const providerError=(body:Record<string,unknown>,fallback:string)=>{
- const error=body.error as {message?:unknown}|undefined;
- return typeof error?.message==='string'?error.message:fallback;
+ const error=body.error;
+ if(typeof error==='string'&&error.trim())return error;
+ if(error&&typeof error==='object'&&'message' in error&&typeof error.message==='string'&&error.message.trim())return error.message;
+ if(typeof body.message==='string'&&body.message.trim())return body.message;
+ return fallback;
 };
 
 export function readiness(language:Language,platform:Platform){
@@ -78,13 +81,17 @@ async function zernio(post:PublishPost,platform:'TikTok'|'YouTube'){
  const key=cfg[`${prefix}_API_KEY`],accountId=cfg[`${prefix}_${platform==='TikTok'?'TIKTOK':'YOUTUBE'}_ACCOUNT_ID`];
  if(!key||!accountId)throw Error(`The ${platform} account is not connected.`);
  const target=platform==='YouTube'
-  ?{platform:'youtube',accountId,platformSpecificData:{title:post.title.slice(0,100),visibility:'public'}}
+  ?{platform:'youtube',accountId,platformSpecificData:{title:post.title.slice(0,100),visibility:'public',madeForKids:false,categoryId:'22'}}
   :{platform:'tiktok',accountId};
  const payload={content:post.caption,mediaItems:[{url:post.videoUrl,type:'video'}],platforms:[target],publishNow:true,timezone:'Africa/Johannesburg'};
  const response=await fetch('https://zernio.com/api/v1/posts',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)});
  const body=await responseBody(response);
  if(!response.ok)throw Error(providerError(body,`${platform} rejected the post.`));
  const zernioPost=body.post as Record<string,unknown>|undefined;
+ const targets=Array.isArray(zernioPost?.platforms)?zernioPost.platforms as Record<string,unknown>[]:[];
+ const result=targets.find(item=>item.platform===(platform==='YouTube'?'youtube':'tiktok'));
+ if(result?.status==='failed')throw Error(typeof result.errorMessage==='string'&&result.errorMessage.trim()?result.errorMessage:`${platform} rejected the post.`);
+ if(zernioPost?.status==='failed')throw Error(providerError(body,`${platform} rejected the post.`));
  const id=body._id??body.id??zernioPost?._id??zernioPost?.id;
  if(typeof id!=='string')throw Error(`${platform} did not return a post ID.`);
  return id;
