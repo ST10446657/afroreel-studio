@@ -86,6 +86,19 @@ async function zernio(post:PublishPost,platform:'TikTok'|'YouTube'){
  const payload={content:post.caption,mediaItems:[{url:post.videoUrl,type:'video'}],platforms:[target],publishNow:true,timezone:'Africa/Johannesburg'};
  const response=await fetch('https://zernio.com/api/v1/posts',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)});
  const body=await responseBody(response);
+ if(response.status===409){
+  const details=body.details as Record<string,unknown>|undefined;
+  const existingPostId=details?.existingPostId;
+  if(typeof existingPostId==='string'&&existingPostId){
+   const existing=await fetch(`https://zernio.com/api/v1/posts/${encodeURIComponent(existingPostId)}`,{headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
+   const existingBody=await responseBody(existing);
+   const existingPost=existingBody.post as Record<string,unknown>|undefined;
+   const existingTargets=Array.isArray(existingPost?.platforms)?existingPost.platforms as Record<string,unknown>[]:[];
+   const existingTarget=existingTargets.find(item=>item.platform===(platform==='YouTube'?'youtube':'tiktok'));
+   if(existing.ok&&existingTarget?.status==='published')return existingPostId;
+   if(existing.ok&&(existingTarget?.status==='publishing'||existingTarget?.status==='pending'||existingPost?.status==='publishing'||existingPost?.status==='scheduled'))throw Error(`${platform} is already publishing. Check again in a few minutes.`);
+  }
+ }
  if(!response.ok)throw Error(providerError(body,`${platform} rejected the post.`));
  const zernioPost=body.post as Record<string,unknown>|undefined;
  const targets=Array.isArray(zernioPost?.platforms)?zernioPost.platforms as Record<string,unknown>[]:[];
