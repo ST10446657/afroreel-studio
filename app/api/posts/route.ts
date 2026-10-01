@@ -42,7 +42,18 @@ export async function PATCH(request:Request){
   const now=Date.now(),status=body.status==='ready'&&body.videoUrl?'ready':body.status==='paused'?'paused':'draft';
  try{
   const database=db();const owned=await database.prepare(`SELECT id,status FROM posts WHERE id=?`).bind(body.id).first() as {id?:string;status?:string}|null;if(!owned)return json({error:'Post not found.'},404);if(owned.status==='published'||owned.status==='publishing')return json({error:'Published posts cannot be edited.'},409);
-  await database.batch([database.prepare(`UPDATE posts SET language=?,title=?,caption=?,video_url=?,scheduled_at=?,status=?,updated_at=? WHERE id=?`).bind(body.language,body.title.trim(),body.caption?.trim()??'',body.videoUrl?.trim()||null,body.scheduledAt,status,now,body.id),database.prepare(`DELETE FROM post_targets WHERE post_id=?`).bind(body.id),...platforms.map(platform=>database.prepare(`INSERT INTO post_targets (post_id,platform,status,updated_at) VALUES (?,?,?,?)`).bind(body.id,platform,status==='paused'?'draft':status,now))]);
+  const targetStatus=status==='paused'?'draft':status;
+  const placeholders=platforms.map(()=>'?').join(',');
+  await database.batch([
+   database.prepare(`UPDATE posts SET language=?,title=?,caption=?,video_url=?,scheduled_at=?,status=?,updated_at=? WHERE id=?`).bind(body.language,body.title.trim(),body.caption?.trim()??'',body.videoUrl?.trim()||null,body.scheduledAt,status,now,body.id),
+   database.prepare(`DELETE FROM post_targets WHERE post_id=? AND status NOT IN ('published','publishing') AND platform NOT IN (${placeholders})`).bind(body.id,...platforms),
+   ...platforms.map(platform=>database.prepare(`INSERT INTO post_targets (post_id,platform,status,external_id,error,updated_at) VALUES (?,?,?,NULL,NULL,?)
+    ON CONFLICT(post_id,platform) DO UPDATE SET
+     status=CASE WHEN post_targets.status IN ('published','publishing') THEN post_targets.status ELSE excluded.status END,
+     external_id=CASE WHEN post_targets.status IN ('published','publishing') THEN post_targets.external_id ELSE NULL END,
+     error=CASE WHEN post_targets.status IN ('published','publishing') THEN post_targets.error ELSE NULL END,
+     updated_at=excluded.updated_at`).bind(body.id,platform,targetStatus,now))
+  ]);
   return json({id:body.id,status,message:'Post updated. Nothing was published.'});
  }catch{return json({error:'The post could not be updated.'},503);}
 }

@@ -20,6 +20,10 @@ export async function loadPost(id:string,owner?:string){
 export async function validatePost(post:Awaited<ReturnType<typeof loadPost>>){
  if(!post)throw Error('Post not found.');
  if(!post.videoUrl||!/^https:\/\//i.test(post.videoUrl))throw Error('Add a public HTTPS video URL.');
+ const media=await fetch(post.videoUrl,{headers:{Range:'bytes=0-0'},redirect:'follow',signal:AbortSignal.timeout(15000)}).catch(()=>null);
+ const contentType=media?.headers.get('content-type')?.toLowerCase()??'';
+ void media?.body?.cancel();
+ if(!media?.ok||(!contentType.startsWith('video/')&&!contentType.includes('application/octet-stream')&&!contentType.includes('application/binary')))throw Error('The video URL must open the video file directly. Google Drive share-page links are not supported.');
  return post.targets.map(target=>({platform:target.platform,connected:readiness(post.language,target.platform),status:readiness(post.language,target.platform)?'ready':'not_connected'}));
 }
 

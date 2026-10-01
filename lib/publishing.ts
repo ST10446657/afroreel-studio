@@ -77,7 +77,10 @@ async function zernio(post:PublishPost,platform:'TikTok'|'YouTube'){
  const cfg=config(),prefix=post.language==='en'?'ZERNIO_EN':'ZERNIO_ZU';
  const key=cfg[`${prefix}_API_KEY`],accountId=cfg[`${prefix}_${platform==='TikTok'?'TIKTOK':'YOUTUBE'}_ACCOUNT_ID`];
  if(!key||!accountId)throw Error(`The ${platform} account is not connected.`);
- const payload={content:post.caption,title:post.title,mediaItems:[{url:post.videoUrl,type:'video'}],platforms:[{platform:platform.toLowerCase(),accountId}],scheduledFor:new Date(Date.now()+60000).toISOString(),timezone:'Africa/Johannesburg'};
+ const target=platform==='YouTube'
+  ?{platform:'youtube',accountId,platformSpecificData:{title:post.title.slice(0,100),visibility:'public'}}
+  :{platform:'tiktok',accountId};
+ const payload={content:post.caption,mediaItems:[{url:post.videoUrl,type:'video'}],platforms:[target],publishNow:true,timezone:'Africa/Johannesburg'};
  const response=await fetch('https://zernio.com/api/v1/posts',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)});
  const body=await responseBody(response);
  if(!response.ok)throw Error(providerError(body,`${platform} rejected the post.`));
