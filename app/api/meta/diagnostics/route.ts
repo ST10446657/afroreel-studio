@@ -1,5 +1,6 @@
 import {env} from 'cloudflare:workers';
 import {isLanguage,metaPrefix} from '@/lib/languages';
+import {isAuthenticated} from '@/lib/auth';
 
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
@@ -14,7 +15,7 @@ const safeError=(body:GraphError,status:number)=>({
 });
 
 export async function GET(request:Request){
- if(!request.headers.get('oai-authenticated-user-id'))return json({error:'Sign in to run Meta diagnostics.'},401);
+ if(!isAuthenticated(request))return json({error:'Sign in to run Meta diagnostics.'},401);
  const language=new URL(request.url).searchParams.get('language');
  if(!isLanguage(language))return json({error:'Choose a supported language.'},400);
  const cfg=env as unknown as Record<string,string|undefined>;
@@ -22,13 +23,17 @@ export async function GET(request:Request){
  const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN;
  const pageId=cfg[`${prefix}_PAGE_ID`];
  const igId=cfg[`${prefix}_IG_USER_ID`];
- if(!token||!pageId||!igId)return json({error:'This Meta workspace is not configured.'},503);
  const graph=cfg.META_GRAPH_VERSION??'v21.0';
  const get=async(path:string)=>{
   const response=await fetch(`https://graph.facebook.com/${graph}/${path}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(15000)});
   const body=await response.json() as Record<string,unknown>&GraphError;
   return response.ok?{ok:true as const,data:body}:{ok:false as const,error:safeError(body,response.status)};
  };
+ if(!token)return json({error:'This Meta workspace is not configured.'},503);
+ if(!pageId||!igId){
+  const assets=await get('me/accounts?limit=100&fields=id,name,instagram_business_account{id,username}');
+  return json({language,configured:false,assets:assets.ok?assets.data:assets});
+ }
  const [identity,permissions,pages,targetPage,targetInstagram]=await Promise.all([
   get('me?fields=id,name'),
   get('me/permissions'),
