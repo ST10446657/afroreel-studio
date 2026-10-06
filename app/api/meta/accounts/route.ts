@@ -7,8 +7,9 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
 
 export async function GET(request: Request) {
   if (!request.headers.get('oai-authenticated-user-id')) return json({ error: 'Sign in to view Meta connections.' }, 401);
-  if (!cfg.META_SYSTEM_USER_TOKEN || !cfg.META_PAGE_ID || !cfg.META_IG_USER_ID) return json({ status: 'not_configured', facebook: null, instagram: null });
-  const headers = { Authorization: `Bearer ${cfg.META_SYSTEM_USER_TOKEN}` };
+  const token=cfg.META_SYSTEM_USER_TOKEN||cfg.META_EN_SYSTEM_USER_TOKEN||cfg.META_SHARED_SYSTEM_USER_TOKEN;
+  if (!token || !cfg.META_PAGE_ID || !cfg.META_IG_USER_ID) return json({ status: 'not_configured', facebook: null, instagram: null });
+  const headers = { Authorization: `Bearer ${token}` };
   try {
     const [pageRes, igRes] = await Promise.all([
       fetch(`https://graph.facebook.com/${graph}/${cfg.META_PAGE_ID}?fields=id,name,fan_count`, { headers }),

@@ -17,7 +17,7 @@ export async function GET(request:Request){
  if(!isLanguage(language)||![7,30,90].includes(days))return json({error:'Choose a language and a 7, 30 or 90 day period.'},400);
  const cfg=env as unknown as Record<string,string|undefined>;
  const prefix=metaPrefix(language);
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN,pageId=cfg[`${prefix}_PAGE_ID`],configuredIgId=cfg[`${prefix}_IG_USER_ID`];
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_EN_SYSTEM_USER_TOKEN||cfg.META_SHARED_SYSTEM_USER_TOKEN,pageId=cfg[`${prefix}_PAGE_ID`],configuredIgId=cfg[`${prefix}_IG_USER_ID`];
  if(!token||!pageId||!configuredIgId)return json({language,channels:[
   {platform:'Facebook',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},
   {platform:'Instagram',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},

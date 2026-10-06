@@ -22,7 +22,7 @@ export function readiness(language:Language,platform:Platform){
  const cfg=config();
  if(platform==='Facebook'||platform==='Instagram'){
   const p=metaPrefix(language);
-  return Boolean((cfg[`${p}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN)&&cfg[`${p}_PAGE_ID`]&&cfg[`${p}_IG_USER_ID`]);
+  return Boolean((cfg[`${p}_SYSTEM_USER_TOKEN`]||cfg.META_EN_SYSTEM_USER_TOKEN||cfg.META_SHARED_SYSTEM_USER_TOKEN)&&cfg[`${p}_PAGE_ID`]&&cfg[`${p}_IG_USER_ID`]);
  }
  const p=zernioPrefix(language);
  return Boolean(cfg[`${p}_API_KEY`]&&cfg[`${p}_${platform==='TikTok'?'TIKTOK':'YOUTUBE'}_ACCOUNT_ID`]);
@@ -30,7 +30,7 @@ export function readiness(language:Language,platform:Platform){
 
 async function metaContext(language:Language){
  const cfg=config(),prefix=metaPrefix(language);
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN,pageId=cfg[`${prefix}_PAGE_ID`],igId=cfg[`${prefix}_IG_USER_ID`];
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_EN_SYSTEM_USER_TOKEN||cfg.META_SHARED_SYSTEM_USER_TOKEN,pageId=cfg[`${prefix}_PAGE_ID`],igId=cfg[`${prefix}_IG_USER_ID`];
  if(!token||!pageId||!igId)throw Error('This Meta workspace is not connected.');
  const response=await fetch(`${graphBase()}/${pageId}?fields=access_token`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(15000)});
  const body=await responseBody(response);

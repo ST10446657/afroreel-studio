@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const platforms = (body.platforms ?? ['Facebook', 'Instagram', 'TikTok', 'YouTube']).filter(p => ['Facebook', 'Instagram', 'TikTok', 'YouTube'].includes(p));
   if (!platforms.length) return json({ error: 'Choose at least one platform.' }, 400);
   const meta=metaPrefix(body.language),zernio=zernioPrefix(body.language);
-  const token=cfg[`${meta}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN;
+  const token=cfg[`${meta}_SYSTEM_USER_TOKEN`]||cfg.META_EN_SYSTEM_USER_TOKEN||cfg.META_SHARED_SYSTEM_USER_TOKEN;
   const connected = {
     Facebook:Boolean(token&&cfg[`${meta}_PAGE_ID`]),
     Instagram:Boolean(token&&cfg[`${meta}_IG_USER_ID`]),

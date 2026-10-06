@@ -20,7 +20,7 @@ export async function GET(request:Request){
  if(!isLanguage(language))return json({error:'Choose a supported language.'},400);
  const cfg=env as unknown as Record<string,string|undefined>;
  const prefix=metaPrefix(language);
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN;
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_EN_SYSTEM_USER_TOKEN||cfg.META_SHARED_SYSTEM_USER_TOKEN;
  const pageId=cfg[`${prefix}_PAGE_ID`];
  const igId=cfg[`${prefix}_IG_USER_ID`];
  const graph=cfg.META_GRAPH_VERSION??'v21.0';

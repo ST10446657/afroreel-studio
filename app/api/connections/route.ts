@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     { platform: 'YouTube', apiPlatform: 'youtube', id: config[`${prefix}_YOUTUBE_ACCOUNT_ID`] },
   ];
   const meta=metaPrefix(language);
-  const metaReady=Boolean((config[`${meta}_SYSTEM_USER_TOKEN`]||config.META_SHARED_SYSTEM_USER_TOKEN)&&config[`${meta}_PAGE_ID`]&&config[`${meta}_IG_USER_ID`]);
+  const metaReady=Boolean((config[`${meta}_SYSTEM_USER_TOKEN`]||config.META_EN_SYSTEM_USER_TOKEN||config.META_SHARED_SYSTEM_USER_TOKEN)&&config[`${meta}_PAGE_ID`]&&config[`${meta}_IG_USER_ID`]);
   const base = [{ platform: 'Facebook', provider: 'Meta', status: metaReady?'connected':'not_connected', username: null }, { platform: 'Instagram', provider: 'Meta', status: metaReady?'connected':'not_connected', username: null }];
   if (!key || !profileId) return json({ language, checkedAt: null, accounts: [...base, ...expected.map(a => ({ platform: a.platform, provider: 'Zernio', status: 'not_connected', username: null }))] });
   try {
