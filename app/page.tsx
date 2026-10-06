@@ -10,8 +10,8 @@ import {Input} from '@/components/ui/input';
 import {SocialAnalytics} from '@/components/social-analytics';
 import {WebsiteAnalytics} from '@/components/website-analytics';
 import {UserJourneyAnalytics} from '@/components/user-journey-analytics';
+import {isLanguage,languageCodes,languageNames,type Language} from '@/lib/languages';
 
-type Language = 'zu' | 'en';
 type Section = 'Scheduling' | 'Analytics';
 const platforms = ['Instagram', 'TikTok', 'Facebook', 'YouTube'] as const;
 type Platform = typeof platforms[number];
@@ -33,10 +33,10 @@ function readNavigation():NavigationState{
   const section=query.get('page')??stored.section;
   const view=query.get('view')??stored.view;
   const analytics=query.get('analytics')??stored.analytics;
-  const channel=query.get('channel')??stored.channel;
+  const channel=query.get('channel')??stored.channel??'all';
   const week=Number(query.get('week')??stored.week??0);
   return {
-    language:language==='en'?'en':'zu',
+    language:isLanguage(language)?language:'zu',
     section:section==='Analytics'?'Analytics':'Scheduling',
     view:view==='calendar'?'calendar':'list',
     analytics:analytics==='Website'?'Website':analytics==='Journey'?'Journey':'Social',
@@ -77,7 +77,7 @@ export default function Home(){
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
   const [feedback,setFeedback]=useState('');
-  const languageName=language==='zu'?'Zulu':'English';
+  const languageName=languageNames[language];
   const days=Array.from({length:7},(_,i)=>datePlus(anchor,week*7+i));
   const posts=drafts.filter(p=>p.language===language&&(channel==='all'||p.targets.some(t=>t.platform===channel))).sort((a,b)=>a.scheduledAt.localeCompare(b.scheduledAt));
 
@@ -122,7 +122,7 @@ export default function Home(){
     const lifecycle=new AbortController();
     try{
       Promise.resolve(context.registerTool({name:'navigate_studio',description:'Open Scheduling or Analytics in AfroReel Studio.',inputSchema:{type:'object',properties:{section:{type:'string',enum:['Scheduling','Analytics','Analysis']}},required:['section'],additionalProperties:false},execute(input:unknown){const value=(input as {section?:unknown})?.section;if(value!=='Scheduling'&&value!=='Analytics'&&value!=='Analysis')throw new Error('Choose Scheduling or Analytics.');flushSync(()=>setSection(value==='Analysis'?'Analytics':value));return {section:value,publishingEnabled:false}}},{signal:lifecycle.signal})).catch(()=>{});
-      Promise.resolve(context.registerTool({name:'diagnose_meta',description:'Run a read-only Meta connection diagnostic for an AfroReel workspace.',inputSchema:{type:'object',properties:{language:{type:'string',enum:['zu','en']}},required:['language'],additionalProperties:false},async execute(input:unknown){const value=(input as {language?:unknown})?.language;if(value!=='zu'&&value!=='en')throw new Error('Choose zu or en.');const response=await fetch(`/api/meta/diagnostics?language=${value}`,{cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error((result as {error?:string}).error??'Meta diagnostics failed.');return result;}},{signal:lifecycle.signal})).catch(()=>{});
+      Promise.resolve(context.registerTool({name:'diagnose_meta',description:'Run a read-only Meta connection diagnostic for an AfroReel workspace.',inputSchema:{type:'object',properties:{language:{type:'string',enum:[...languageCodes]}},required:['language'],additionalProperties:false},async execute(input:unknown){const value=(input as {language?:unknown})?.language;if(!isLanguage(value))throw new Error('Choose a supported language.');const response=await fetch(`/api/meta/diagnostics?language=${value}`,{cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error((result as {error?:string}).error??'Meta diagnostics failed.');return result;}},{signal:lifecycle.signal})).catch(()=>{});
     }catch{}
     return()=>lifecycle.abort();
   },[]);
@@ -131,7 +131,7 @@ export default function Home(){
     <header className="studio-header">
       <a href="/" className="studio-brand" aria-label="AfroReel Studio"><img src="/afroreel-logo.jpg" alt=""/><span>afroreel <small>Studio</small></span></a>
       <Tabs value={section} onValueChange={v=>setSection(v as Section)} className="studio-nav"><TabsList variant="line" aria-label="Main navigation"><TabsTrigger value="Scheduling">Scheduling</TabsTrigger><TabsTrigger value="Analytics">Analytics</TabsTrigger></TabsList></Tabs>
-      <div className="studio-controls"><Picker label="Language workspace" value={language} onChange={v=>{setLanguage(v as Language);setDraftOpen(false);setFeedback('')}} options={[{value:'zu',label:'Zulu'},{value:'en',label:'English'}]}/><button className="settings-trigger" onClick={()=>setSettings(true)} aria-label="Settings"><Settings2 size={19}/></button></div>
+      <div className="studio-controls"><Picker label="Language workspace" value={language} onChange={v=>{if(isLanguage(v))setLanguage(v);setDraftOpen(false);setFeedback('')}} options={languageCodes.map(value=>({value,label:languageNames[value]}))}/><button className="settings-trigger" onClick={()=>setSettings(true)} aria-label="Settings"><Settings2 size={19}/></button></div>
     </header>
     <main className="studio-main">
       <div className="studio-heading"><div><p className="eyebrow">{languageName} workspace</p><h1>{section}</h1><p className="intro">{section==='Scheduling'?'Your content, organised in one place.':'See how your content and website perform.'}</p></div>{section==='Scheduling'&&<button className="button primary-button" onClick={()=>openDraft()}><Plus size={17}/>New post</button>}</div>

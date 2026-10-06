@@ -1,13 +1,15 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
+import type {Language} from '@/lib/languages';
 type Post={id:string;title:string;publishedAt:string|null;url:string|null;views:number|null;likes:number|null;comments:number|null;shares:number|null;syncStatus:string};
 type Channel={platform:string;username:string|null;followers:number|null;updatedAt:string|null;status:string;message:string|null;posts:Post[]};
 type Data={language:string;fromDate:string;toDate:string;checkedAt:string;channels:Channel[]};
 const format=(n:number|null)=>n===null?'—':n.toLocaleString();
-export function SocialAnalytics({language}:{language:'zu'|'en'}){
+const readJson=async(r:Response)=>{const text=await r.text();try{return JSON.parse(text) as Data&{error?:string}}catch{throw Error(r.status===401||text.trimStart().startsWith('<')?'Your session could not be verified. Refresh the page and sign in again.':'The analytics service returned an invalid response. Try Refresh.')}};
+export function SocialAnalytics({language}:{language:Language}){
  const [days,setDays]=useState('30'),[platform,setPlatform]=useState('all'),[version,setVersion]=useState(0),[data,setData]=useState<Data|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
- useEffect(()=>{const c=new AbortController();setLoading(true);setData(null);setError('');Promise.all(['/api/analytics','/api/meta/insights'].map(async path=>{const r=await fetch(`${path}?language=${language}&days=${days}`,{signal:c.signal,cache:'no-store'});const d=await r.json() as Data & {error?:string};if(!r.ok)throw Error(d.error||'Unable to load analytics.');return d;})).then(([zernio,meta])=>{if(!c.signal.aborted)setData({...zernio,channels:[...meta.channels,...zernio.channels]})}).catch(e=>{if(!c.signal.aborted)setError(e.message||'Unable to load analytics.');}).finally(()=>{if(!c.signal.aborted)setLoading(false)});return()=>c.abort()},[language,days,version]);
+ useEffect(()=>{const c=new AbortController();setLoading(true);setData(null);setError('');Promise.all(['/api/analytics','/api/meta/insights'].map(async path=>{const r=await fetch(`${path}?language=${language}&days=${days}`,{signal:c.signal,cache:'no-store'});const d=await readJson(r);if(!r.ok)throw Error(d.error||'Unable to load analytics.');return d;})).then(([zernio,meta])=>{if(!c.signal.aborted)setData({...zernio,channels:[...meta.channels,...zernio.channels]})}).catch(e=>{if(!c.signal.aborted)setError(e.message||'Unable to load analytics.');}).finally(()=>{if(!c.signal.aborted)setLoading(false)});return()=>c.abort()},[language,days,version]);
  const channels=data?.language===language?data.channels.filter(c=>platform==='all'||c.platform===platform):[];
  const posts=channels.flatMap(c=>c.posts.map(p=>({...p,platform:c.platform}))).sort((a,b)=>(b.views??-1)-(a.views??-1));
  const total=(field:'views'|'likes'|'comments')=>{const values=posts.map(p=>p[field]).filter((v):v is number=>v!==null);return values.length?values.reduce((a,b)=>a+b,0):null};

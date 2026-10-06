@@ -1,4 +1,6 @@
 import { env } from 'cloudflare:workers';
+import {isLanguage,zernioPrefix} from '@/lib/languages';
+import {isAuthenticated} from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 const headers = {'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
 const number = (v: unknown): number|null => typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -6,13 +8,13 @@ const safeUrl = (v:unknown) => typeof v==='string' && /^https:\/\/(www\.)?(youtu
 type Metrics = Record<string,unknown>;
 type RawPost = {_id:string;content?:string;publishedAt?:string;profileId?:string;platforms?:{platform?:string;accountId?:string;accountUsername?:string;platformPostId?:string;platformPostUrl?:string;syncStatus?:string;analytics?:Metrics}[]};
 export async function GET(request:Request){
-  if(!request.headers.get('oai-authenticated-user-id'))return Response.json({error:'Sign in to view analytics.'},{status:401,headers});
+  if(!isAuthenticated(request))return Response.json({error:'Sign in to view analytics.'},{status:401,headers});
   const params=new URL(request.url).searchParams;
   const language=params.get('language');
   const days=Number(params.get('days')??30);
-  if(!['zu','en'].includes(language??'')||![7,30,90].includes(days))return Response.json({error:'Choose a language and a 7, 30 or 90 day period.'},{status:400,headers});
+  if(!isLanguage(language)||![7,30,90].includes(days))return Response.json({error:'Choose a language and a 7, 30 or 90 day period.'},{status:400,headers});
   const cfg=env as unknown as Record<string,string|undefined>;
-  const prefix=language==='en'?'ZERNIO_EN':'ZERNIO_ZU';
+  const prefix=zernioPrefix(language);
   const key=cfg[`${prefix}_API_KEY`],profile=cfg[`${prefix}_PROFILE_ID`];
   const toDate=new Date().toISOString().slice(0,10),fromDate=new Date(Date.now()-(days-1)*86400000).toISOString().slice(0,10);
   const channels=await Promise.all(['tiktok','youtube'].map(async platform=>{

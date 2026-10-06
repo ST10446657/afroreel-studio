@@ -1,10 +1,11 @@
 import {env} from 'cloudflare:workers';
+import {isLanguage,type Language} from '@/lib/languages';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
 const allowed=['Instagram','TikTok','Facebook','YouTube'] as const;
 type Platform=typeof allowed[number];
-type Body={id?:string;language?:'zu'|'en';title?:string;caption?:string;videoUrl?:string|null;scheduledAt?:string;platforms?:Platform[];status?:'draft'|'ready'|'paused'};
+type Body={id?:string;language?:Language;title?:string;caption?:string;videoUrl?:string|null;scheduledAt?:string;platforms?:Platform[];status?:'draft'|'ready'|'paused'};
 type D1={prepare:(sql:string)=>{bind:(...values:unknown[])=>any};batch:(statements:any[])=>Promise<unknown>};
 const db=()=>{const value=(env as unknown as {DB?:D1}).DB;if(!value)throw Error('Draft storage is unavailable.');return value};
 const user=(request:Request)=>request.headers.get('oai-authenticated-user-id');
@@ -31,7 +32,7 @@ export async function POST(request:Request){
  const owner=user(request);if(!owner)return json({error:'Sign in to save posts.'},401);
  const body=await request.json().catch(()=>null) as Body|null;
  const platforms=[...new Set((body?.platforms??[]).filter((p):p is Platform=>allowed.includes(p)))];
- if(!body?.language||!['zu','en'].includes(body.language)||!body.title?.trim()||!body.scheduledAt||!platforms.length)return json({error:'Title, schedule, language and at least one platform are required.'},400);
+ if(!isLanguage(body?.language)||!body.title?.trim()||!body.scheduledAt||!platforms.length)return json({error:'Title, schedule, language and at least one platform are required.'},400);
  if(!validUrl(body.videoUrl))return json({error:'The video must use a public HTTPS URL.'},400);
  const id=crypto.randomUUID(),now=Date.now(),status=body.status==='ready'&&body.videoUrl?'ready':'draft';
  try{
@@ -44,7 +45,7 @@ export async function PATCH(request:Request){
  const owner=user(request);if(!owner)return json({error:'Sign in to update posts.'},401);
  const body=await request.json().catch(()=>null) as Body|null;
  const platforms=[...new Set((body?.platforms??[]).filter((p):p is Platform=>allowed.includes(p)))];
- if(!body?.id||!body.language||!body.title?.trim()||!body.scheduledAt||!platforms.length)return json({error:'Post id, title, schedule, language and platforms are required.'},400);
+ if(!body?.id||!isLanguage(body.language)||!body.title?.trim()||!body.scheduledAt||!platforms.length)return json({error:'Post id, title, schedule, language and platforms are required.'},400);
  if(!validUrl(body.videoUrl))return json({error:'The video must use a public HTTPS URL.'},400);
   const now=Date.now(),status=body.status==='ready'&&body.videoUrl?'ready':body.status==='paused'?'paused':'draft';
  try{

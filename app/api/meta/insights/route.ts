@@ -1,4 +1,6 @@
 import {env} from 'cloudflare:workers';
+import {isLanguage,metaPrefix} from '@/lib/languages';
+import {isAuthenticated} from '@/lib/auth';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
@@ -8,14 +10,14 @@ type Insight={name?:string;values?:{value?:unknown}[]};
 const insight=(rows:Insight[]|undefined,name:string)=>num(rows?.find(row=>row.name===name)?.values?.[0]?.value);
 
 export async function GET(request:Request){
- if(!request.headers.get('oai-authenticated-user-id'))return json({error:'Sign in to view Meta analytics.'},401);
+ if(!isAuthenticated(request))return json({error:'Sign in to view Meta analytics.'},401);
  const query=new URL(request.url).searchParams;
  const language=query.get('language');
  const days=Number(query.get('days')??30);
- if(!['zu','en'].includes(language??'')||![7,30,90].includes(days))return json({error:'Choose a language and a 7, 30 or 90 day period.'},400);
+ if(!isLanguage(language)||![7,30,90].includes(days))return json({error:'Choose a language and a 7, 30 or 90 day period.'},400);
  const cfg=env as unknown as Record<string,string|undefined>;
- const prefix=language==='en'?'META_EN':'META';
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`],pageId=cfg[`${prefix}_PAGE_ID`],configuredIgId=cfg[`${prefix}_IG_USER_ID`];
+ const prefix=metaPrefix(language);
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN,pageId=cfg[`${prefix}_PAGE_ID`],configuredIgId=cfg[`${prefix}_IG_USER_ID`];
  if(!token||!pageId||!configuredIgId)return json({language,channels:[
   {platform:'Facebook',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},
   {platform:'Instagram',status:'unavailable',message:'This account is not connected.',username:null,followers:null,posts:[]},

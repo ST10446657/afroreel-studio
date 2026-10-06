@@ -1,5 +1,6 @@
 import {env} from 'cloudflare:workers';
 import {publishTarget,readiness,type Platform,type PublishPost} from './publishing';
+import type {Language} from './languages';
 
 type D1Result={meta?:{changes?:number};results?:Record<string,unknown>[]};
 type Statement={bind:(...values:unknown[])=>Statement;first:()=>Promise<Record<string,unknown>|null>;all:()=>Promise<D1Result>;run:()=>Promise<D1Result>};
@@ -14,7 +15,7 @@ export async function loadPost(id:string,owner?:string){
  const rows=await db().prepare(`SELECT p.id,p.language,p.title,p.caption,p.video_url AS videoUrl,p.scheduled_at AS scheduledAt,t.platform,t.status AS targetStatus,t.external_id AS externalId FROM posts p JOIN post_targets t ON t.post_id=p.id WHERE ${where} ORDER BY t.platform`).bind(...args).all();
  if(!rows.results?.length)return null;
  const first=rows.results[0];
- return {id:String(first.id),language:first.language as 'zu'|'en',title:String(first.title),caption:typeof first.caption==='string'?first.caption:'',videoUrl:typeof first.videoUrl==='string'?first.videoUrl:'',scheduledAt:String(first.scheduledAt),targets:rows.results.map(row=>({platform:row.platform as Platform,status:String(row.targetStatus),externalId:typeof row.externalId==='string'?row.externalId:null}))};
+ return {id:String(first.id),language:first.language as Language,title:String(first.title),caption:typeof first.caption==='string'?first.caption:'',videoUrl:typeof first.videoUrl==='string'?first.videoUrl:'',scheduledAt:String(first.scheduledAt),targets:rows.results.map(row=>({platform:row.platform as Platform,status:String(row.targetStatus),externalId:typeof row.externalId==='string'?row.externalId:null}))};
 }
 
 export async function validatePost(post:Awaited<ReturnType<typeof loadPost>>){

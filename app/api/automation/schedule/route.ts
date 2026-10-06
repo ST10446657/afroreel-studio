@@ -1,12 +1,13 @@
 import {env} from 'cloudflare:workers';
 import type {D1Database} from '@cloudflare/workers-types';
+import {isLanguage,type Language} from '@/lib/languages';
 
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
 const allowed=['Instagram','TikTok','Facebook','YouTube'] as const;
 type Platform=typeof allowed[number];
-type Body={language?:'zu'|'en';episode?:number;title?:string;caption?:string;videoUrl?:string;scheduledAt?:string;platforms?:Platform[]};
+type Body={language?:Language;episode?:number;title?:string;caption?:string;videoUrl?:string;scheduledAt?:string;platforms?:Platform[]};
 const db=()=>{const value=(env as unknown as {DB?:D1Database}).DB;if(!value)throw Error('Schedule storage is unavailable.');return value};
 
 async function digest(value:string){return new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))}
@@ -24,7 +25,7 @@ export async function POST(request:Request){
  if(!key||!(await authorized(request,key)))return json({error:'Unauthorized.'},401);
  const body=await request.json().catch(()=>null) as Body|null;
  const platforms=[...new Set((body?.platforms??[]).filter((p):p is Platform=>allowed.includes(p)))];
- if(!body?.language||!['zu','en'].includes(body.language)||!Number.isInteger(body.episode)||Number(body.episode)<1||!body.title?.trim()||!body.caption?.trim()||!body.videoUrl||!/^https:\/\//i.test(body.videoUrl)||!body.scheduledAt||!platforms.length)return json({error:'Language, episode, title, caption, public HTTPS video URL, schedule and platforms are required.'},400);
+ if(!isLanguage(body?.language)||!Number.isInteger(body.episode)||Number(body.episode)<1||!body.title?.trim()||!body.caption?.trim()||!body.videoUrl||!/^https:\/\//i.test(body.videoUrl)||!body.scheduledAt||!platforms.length)return json({error:'Language, episode, title, caption, public HTTPS video URL, schedule and platforms are required.'},400);
  const when=new Date(body.scheduledAt);if(!Number.isFinite(when.getTime())||when.getTime()<=Date.now()+60000)return json({error:'Choose a valid time at least one minute in the future.'},400);
  const id=await stableId({language:body.language,episode:Number(body.episode),scheduledAt:body.scheduledAt,platforms});
  const database=db();const existing=await database.prepare('SELECT id,status,scheduled_at AS scheduledAt FROM posts WHERE id=?').bind(id).first();

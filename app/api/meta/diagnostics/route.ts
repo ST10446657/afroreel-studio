@@ -1,4 +1,5 @@
 import {env} from 'cloudflare:workers';
+import {isLanguage,metaPrefix} from '@/lib/languages';
 
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
@@ -15,10 +16,10 @@ const safeError=(body:GraphError,status:number)=>({
 export async function GET(request:Request){
  if(!request.headers.get('oai-authenticated-user-id'))return json({error:'Sign in to run Meta diagnostics.'},401);
  const language=new URL(request.url).searchParams.get('language');
- if(language!=='zu'&&language!=='en')return json({error:'Choose Zulu or English.'},400);
+ if(!isLanguage(language))return json({error:'Choose a supported language.'},400);
  const cfg=env as unknown as Record<string,string|undefined>;
- const prefix=language==='en'?'META_EN':'META';
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`];
+ const prefix=metaPrefix(language);
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN;
  const pageId=cfg[`${prefix}_PAGE_ID`];
  const igId=cfg[`${prefix}_IG_USER_ID`];
  if(!token||!pageId||!igId)return json({error:'This Meta workspace is not configured.'},503);

@@ -1,8 +1,8 @@
 import {env} from 'cloudflare:workers';
+import {metaPrefix,zernioPrefix,type Language} from './languages';
 
 export const platforms=['Instagram','TikTok','Facebook','YouTube'] as const;
 export type Platform=typeof platforms[number];
-export type Language='zu'|'en';
 export type PublishPost={id:string;language:Language;title:string;caption:string;videoUrl:string;scheduledAt:string};
 type Config=Record<string,string|undefined>;
 
@@ -21,16 +21,16 @@ const providerError=(body:Record<string,unknown>,fallback:string)=>{
 export function readiness(language:Language,platform:Platform){
  const cfg=config();
  if(platform==='Facebook'||platform==='Instagram'){
-  const p=language==='en'?'META_EN':'META';
-  return Boolean(cfg[`${p}_SYSTEM_USER_TOKEN`]&&cfg[`${p}_PAGE_ID`]&&cfg[`${p}_IG_USER_ID`]);
+  const p=metaPrefix(language);
+  return Boolean((cfg[`${p}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN)&&cfg[`${p}_PAGE_ID`]&&cfg[`${p}_IG_USER_ID`]);
  }
- const p=language==='en'?'ZERNIO_EN':'ZERNIO_ZU';
+ const p=zernioPrefix(language);
  return Boolean(cfg[`${p}_API_KEY`]&&cfg[`${p}_${platform==='TikTok'?'TIKTOK':'YOUTUBE'}_ACCOUNT_ID`]);
 }
 
 async function metaContext(language:Language){
- const cfg=config(),prefix=language==='en'?'META_EN':'META';
- const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`],pageId=cfg[`${prefix}_PAGE_ID`],igId=cfg[`${prefix}_IG_USER_ID`];
+ const cfg=config(),prefix=metaPrefix(language);
+ const token=cfg[`${prefix}_SYSTEM_USER_TOKEN`]||cfg.META_SHARED_SYSTEM_USER_TOKEN,pageId=cfg[`${prefix}_PAGE_ID`],igId=cfg[`${prefix}_IG_USER_ID`];
  if(!token||!pageId||!igId)throw Error('This Meta workspace is not connected.');
  const response=await fetch(`${graphBase()}/${pageId}?fields=access_token`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(15000)});
  const body=await responseBody(response);
@@ -77,7 +77,7 @@ async function instagram(post:PublishPost){
 }
 
 async function zernio(post:PublishPost,platform:'TikTok'|'YouTube'){
- const cfg=config(),prefix=post.language==='en'?'ZERNIO_EN':'ZERNIO_ZU';
+ const cfg=config(),prefix=zernioPrefix(post.language);
  const key=cfg[`${prefix}_API_KEY`],accountId=cfg[`${prefix}_${platform==='TikTok'?'TIKTOK':'YOUTUBE'}_ACCOUNT_ID`];
  if(!key||!accountId)throw Error(`The ${platform} account is not connected.`);
  const target=platform==='YouTube'

@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import {isLanguage,languageNames,metaPrefix,zernioPrefix} from '@/lib/languages';
 
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff' };
@@ -9,17 +10,17 @@ export async function GET(request: Request) {
   // Sites dispatch authenticates visitors and enforces this Site's private access policy.
   if (!request.headers.get('oai-authenticated-user-id')) return json({ error: 'Sign in to view connections.' }, 401);
   const language = new URL(request.url).searchParams.get('language');
-  if (language !== 'zu' && language !== 'en') return json({ error: 'Choose Zulu or English.' }, 400);
+  if (!isLanguage(language)) return json({ error: `Choose ${Object.values(languageNames).join(', ')}.` }, 400);
   const config = env as unknown as Record<string, string | undefined>;
-  const prefix = language === 'zu' ? 'ZERNIO_ZU' : 'ZERNIO_EN';
+  const prefix = zernioPrefix(language);
   const key = config[`${prefix}_API_KEY`];
   const profileId = config[`${prefix}_PROFILE_ID`];
   const expected = [
     { platform: 'TikTok', apiPlatform: 'tiktok', id: config[`${prefix}_TIKTOK_ACCOUNT_ID`] },
     { platform: 'YouTube', apiPlatform: 'youtube', id: config[`${prefix}_YOUTUBE_ACCOUNT_ID`] },
   ];
-  const metaPrefix=language==='zu'?'META':'META_EN';
-  const metaReady=Boolean(config[`${metaPrefix}_SYSTEM_USER_TOKEN`]&&config[`${metaPrefix}_PAGE_ID`]&&config[`${metaPrefix}_IG_USER_ID`]);
+  const meta=metaPrefix(language);
+  const metaReady=Boolean((config[`${meta}_SYSTEM_USER_TOKEN`]||config.META_SHARED_SYSTEM_USER_TOKEN)&&config[`${meta}_PAGE_ID`]&&config[`${meta}_IG_USER_ID`]);
   const base = [{ platform: 'Facebook', provider: 'Meta', status: metaReady?'connected':'not_connected', username: null }, { platform: 'Instagram', provider: 'Meta', status: metaReady?'connected':'not_connected', username: null }];
   if (!key || !profileId) return json({ language, checkedAt: null, accounts: [...base, ...expected.map(a => ({ platform: a.platform, provider: 'Zernio', status: 'not_connected', username: null }))] });
   try {
