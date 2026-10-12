@@ -18,6 +18,15 @@ const providerError=(body:Record<string,unknown>,fallback:string)=>{
  return fallback;
 };
 
+type PlatformCopy={version:1;captions?:Partial<Record<Platform,string>>;youtubeTitle?:string};
+function copyFor(post:PublishPost,platform:Platform){
+ try{
+  const parsed=JSON.parse(post.caption) as PlatformCopy;
+  if(parsed?.version===1)return {caption:parsed.captions?.[platform]??'',youtubeTitle:parsed.youtubeTitle?.trim()||post.title};
+ }catch{}
+ return {caption:post.caption,youtubeTitle:post.title};
+}
+
 export function readiness(language:Language,platform:Platform){
  const cfg=config();
  if(platform==='Facebook'||platform==='Instagram'){
@@ -40,7 +49,7 @@ async function metaContext(language:Language){
 
 async function facebook(post:PublishPost){
  const meta=await metaContext(post.language);
- const form=new URLSearchParams({file_url:post.videoUrl,description:post.caption,access_token:meta.token});
+ const form=new URLSearchParams({file_url:post.videoUrl,description:copyFor(post,'Facebook').caption,access_token:meta.token});
  const response=await fetch(`${graphBase()}/${meta.pageId}/videos`,{method:'POST',body:form,signal:AbortSignal.timeout(30000)});
  const body=await responseBody(response);
  if(!response.ok)throw Error(providerError(body,'Facebook rejected the video.'));
@@ -51,7 +60,7 @@ async function facebook(post:PublishPost){
 
 async function instagram(post:PublishPost){
  const meta=await metaContext(post.language);
- const create=new URLSearchParams({media_type:'REELS',video_url:post.videoUrl,caption:post.caption,access_token:meta.token});
+ const create=new URLSearchParams({media_type:'REELS',video_url:post.videoUrl,caption:copyFor(post,'Instagram').caption,access_token:meta.token});
  const created=await fetch(`${graphBase()}/${meta.igId}/media`,{method:'POST',body:create,signal:AbortSignal.timeout(30000)});
  const createdBody=await responseBody(created);
  if(!created.ok)throw Error(providerError(createdBody,'Instagram rejected the video.'));
@@ -80,10 +89,11 @@ async function zernio(post:PublishPost,platform:'TikTok'|'YouTube'){
  const cfg=config(),prefix=zernioPrefix(post.language);
  const key=cfg[`${prefix}_API_KEY`],accountId=cfg[`${prefix}_${platform==='TikTok'?'TIKTOK':'YOUTUBE'}_ACCOUNT_ID`];
  if(!key||!accountId)throw Error(`The ${platform} account is not connected.`);
+ const copy=copyFor(post,platform);
  const target=platform==='YouTube'
-  ?{platform:'youtube',accountId,platformSpecificData:{title:post.title.slice(0,100),visibility:'public',madeForKids:false,categoryId:'22'}}
+  ?{platform:'youtube',accountId,platformSpecificData:{title:copy.youtubeTitle.slice(0,100),visibility:'public',madeForKids:false,categoryId:'22'}}
   :{platform:'tiktok',accountId};
- const payload={content:post.caption,mediaItems:[{url:post.videoUrl,type:'video'}],platforms:[target],publishNow:true,timezone:'Africa/Johannesburg'};
+ const payload={content:copy.caption,mediaItems:[{url:post.videoUrl,type:'video'}],platforms:[target],publishNow:true,timezone:'Africa/Johannesburg'};
  const response=await fetch('https://zernio.com/api/v1/posts',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(30000)});
  const body=await responseBody(response);
  if(response.status===409){
