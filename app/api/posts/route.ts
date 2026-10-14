@@ -6,7 +6,14 @@ const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
 const allowed=['Instagram','TikTok','Facebook','YouTube'] as const;
 type Platform=typeof allowed[number];
 type Body={id?:string;language?:Language;title?:string;caption?:string;captions?:Partial<Record<Platform,string>>;youtubeTitle?:string;videoUrl?:string|null;scheduledAt?:string;platforms?:Platform[];status?:'draft'|'ready'|'paused'};
-type D1={prepare:(sql:string)=>{bind:(...values:unknown[])=>any};batch:(statements:any[])=>Promise<unknown>};
+type D1Result={results?:Record<string,unknown>[]};
+type D1Statement={
+ bind:(...values:unknown[])=>D1Statement;
+ all:()=>Promise<D1Result>;
+ first:()=>Promise<Record<string,unknown>|null>;
+ run:()=>Promise<unknown>;
+};
+type D1={prepare:(sql:string)=>D1Statement;batch:(statements:D1Statement[])=>Promise<unknown>};
 const db=()=>{const value=(env as unknown as {DB?:D1}).DB;if(!value)throw Error('Draft storage is unavailable.');return value};
 const user=(request:Request)=>request.headers.get('oai-authenticated-user-id');
 const validUrl=(value:string|null|undefined)=>!value||/^https:\/\//i.test(value);
