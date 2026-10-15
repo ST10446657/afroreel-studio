@@ -1,11 +1,12 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {AlertTriangle,Check,ChevronRight,Clock3,ExternalLink,FileAudio,FileText,Film,LoaderCircle,LockKeyhole,Music2,RefreshCw,Subtitles,UploadCloud} from 'lucide-react';
+import {AlertTriangle,Check,ChevronRight,Clock3,ExternalLink,FileAudio,FileText,Film,LoaderCircle,LockKeyhole,Music2,RefreshCw,ShieldCheck,Subtitles,UploadCloud} from 'lucide-react';
 
 type StageStatus='locked'|'pending'|'in_progress'|'approved'|'needs_attention';
 type Stage={key:string;status:StageStatus;notes:string;approvedAt:string|null};
 type Episode={id:string;series:string;episodeNumber:number;title:string;driveFolderId:string;driveFileId:string;sourceFilename:string;durationSeconds:number;sourceMetadata:{video?:string;audio?:string;scriptWords?:number};stages:Stage[];updatedAt:number};
+type ElevenStatus={configured:boolean;connected:boolean;account?:{tier:string;status:string;creditsUsed:number|null;creditLimit:number|null};capabilities?:{dubbingRead:boolean;musicGeneration:string;transcriptEditing:string};safety?:{generationEnabled:boolean;paidRequestsMade:number;message:string};error?:string};
 
 const definitions=[
  {key:'source',title:'Source validation',description:'English render and series script',icon:Film},
@@ -37,6 +38,8 @@ export function ProductionWorkflow(){
  const [notes,setNotes]=useState('');
  const [loading,setLoading]=useState(true);
  const [saving,setSaving]=useState(false);
+ const [checking,setChecking]=useState(false);
+ const [eleven,setEleven]=useState<ElevenStatus|null>(null);
  const [error,setError]=useState('');
  const approved=episode?.stages.filter(stage=>stage.status==='approved').length??0;
  const stage=episode?.stages.find(item=>item.key===selected);
@@ -47,6 +50,7 @@ export function ProductionWorkflow(){
 
  async function load(){setLoading(true);setError('');try{const response=await fetch('/api/production',{cache:'no-store'});const data=await response.json() as {episode?:Episode;error?:string};if(!response.ok||!data.episode)throw Error(data.error||'Could not load production.');setEpisode(data.episode);const active=data.episode.stages.find(item=>item.status==='in_progress'||item.status==='needs_attention')??data.episode.stages[0];setSelected(active.key);setNotes(active.notes)}catch(e){setError(e instanceof Error?e.message:'Could not load production.')}finally{setLoading(false)}}
  async function update(status:StageStatus){if(!episode||!stage||saving)return;setSaving(true);setError('');try{const response=await fetch('/api/production',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:episode.id,stageKey:stage.key,status,notes})});const data=await response.json() as {episode?:Episode;error?:string};if(!response.ok||!data.episode)throw Error(data.error||'Could not update this stage.');setEpisode(data.episode);const next=data.episode.stages.find(item=>item.status==='in_progress'||item.status==='needs_attention');if(status==='approved'&&next){setSelected(next.key);setNotes(next.notes)}}catch(e){setError(e instanceof Error?e.message:'Could not update this stage.')}finally{setSaving(false)}}
+ async function checkElevenLabs(){setChecking(true);try{const response=await fetch('/api/production/elevenlabs',{cache:'no-store'});const data=await response.json() as ElevenStatus;setEleven(data)}catch{setEleven({configured:true,connected:false,error:'Connection check failed. No paid request was made.'})}finally{setChecking(false)}}
  useEffect(()=>{void load()},[]);
  useEffect(()=>{setNotes(stage?.notes??'')},[selected,stage?.notes]);
  const sourceUrl=useMemo(()=>episode?`https://drive.google.com/file/d/${episode.driveFileId}/view`:null,[episode]);
@@ -66,6 +70,13 @@ export function ProductionWorkflow(){
    <div className="workflow-list">{definitions.map((item,index)=>{const state=episode.stages.find(stage=>stage.key===item.key)!;const Icon=item.icon;return <button key={item.key} className={`workflow-stage ${selected===item.key?'selected':''} ${state.status}`} onClick={()=>{setSelected(item.key);setNotes(state.notes)}}><span className="stage-number">{index+1}</span><Icon size={18}/><span><strong>{item.title}</strong><small>{item.description}</small></span><span className="stage-status"><StatusIcon status={state.status}/>{state.status.replaceAll('_',' ')}</span><ChevronRight size={16}/></button>})}</div>
   </section>
   <aside className="production-review">
+   <div className="automation-safety">
+    <div className="safety-heading"><ShieldCheck size={17}/><span><strong>Credit-safe automation</strong><small>Generation is locked</small></span></div>
+    <p>Read-only checks cannot create dubs or music. Paid actions will require a stage approval and an idempotency record.</p>
+    <div className="safety-rules"><span><Check size={13}/>One Episode 4 pilot</span><span><Check size={13}/>Zulu is the first language</span><span><Check size={13}/>No automatic paid retries</span><span><Check size={13}/>One music variation</span></div>
+    {eleven&&<div className={`connection-result ${eleven.connected?'connected':'failed'}`}><strong>{eleven.connected?'ElevenLabs connected':eleven.error??'Connection failed'}</strong>{eleven.connected&&<span>{eleven.account?.tier} plan · Dubbing {eleven.capabilities?.dubbingRead?'available':'not available'} · 0 paid requests</span>}</div>}
+    <button className="button" disabled={checking} onClick={()=>void checkElevenLabs()}><RefreshCw className={checking?'spin':''} size={14}/>{checking?'Checking…':eleven?'Check again':'Run read-only check'}</button>
+   </div>
    <p className="review-kicker">Stage {definitions.findIndex(item=>item.key===selected)+1} of {definitions.length}</p>
    <h2>{definition.title}</h2><p className="review-description">{definition.description}</p>
    {selected==='source'&&<div className="source-facts"><div><span>Source</span><strong>{episode.sourceFilename}</strong></div><div><span>Video</span><strong>{episode.sourceMetadata.video}</strong></div><div><span>Audio</span><strong>{episode.sourceMetadata.audio}</strong></div><div><span>Script</span><strong>{episode.sourceMetadata.scriptWords} words extracted</strong></div></div>}
