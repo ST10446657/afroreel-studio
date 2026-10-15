@@ -9,6 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build && node scripts/add-scheduler.mjs",
     "schedule-episode": "node --env-file-if-exists=.env.local scripts/schedule-episode.mjs",
+    "production:validate": "node scripts/validate-production-package.mjs",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt"

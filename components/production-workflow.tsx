@@ -73,6 +73,7 @@ export function ProductionWorkflow(){
    <div className="automation-safety">
     <div className="safety-heading"><ShieldCheck size={17}/><span><strong>Credit-safe automation</strong><small>Generation is locked</small></span></div>
     <p>Read-only checks cannot create dubs or music. Paid actions will require a stage approval and an idempotency record.</p>
+    <div className="connection-result connected"><strong>Episode 4 is the completed reference</strong><span>Episode 5 will be the first automated pilot; Episode 4 will not be regenerated.</span></div>
     <div className="safety-rules"><span><Check size={13}/>One Episode 4 pilot</span><span><Check size={13}/>Zulu is the first language</span><span><Check size={13}/>No automatic paid retries</span><span><Check size={13}/>One music variation</span></div>
     {eleven&&<div className={`connection-result ${eleven.connected?'connected':'failed'}`}><strong>{eleven.connected?'ElevenLabs connected':eleven.error??'Connection failed'}</strong>{eleven.connected&&<span>{eleven.account?.tier} plan · Dubbing {eleven.capabilities?.dubbingRead?'available':'not available'} · 0 paid requests</span>}</div>}
     <button className="button" disabled={checking} onClick={()=>void checkElevenLabs()}><RefreshCw className={checking?'spin':''} size={14}/>{checking?'Checking…':eleven?'Check again':'Run read-only check'}</button>
