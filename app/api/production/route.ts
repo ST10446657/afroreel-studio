@@ -13,7 +13,20 @@ type Stage={key:string;status:StageStatus;notes:string;approvedAt:string|null};
 type Body={id?:string;stageKey?:string;status?:StageStatus;notes?:string};
 
 const stageKeys=['source','transcript','zulu','dubs','translations','music_prompt','music','audio','captions','package','bunny','afroreel'] as const;
-const initialStages:Stage[]=stageKeys.map((key,index)=>({key,status:index===0?'approved':index===1?'in_progress':'locked',notes:index===0?'English render and Episode 4 script validated.':'',approvedAt:index===0?new Date().toISOString():null}));
+const stagesFor=(episodeNumber:number):Stage[]=>stageKeys.map((key,index)=>{
+ const sourceApproved=index===0;
+ const isEpisodeFiveTranscript=episodeNumber===5&&key==='transcript';
+ return {
+  key,
+  status:sourceApproved?'approved':isEpisodeFiveTranscript?'needs_attention':index===1?'in_progress':'locked',
+  notes:sourceApproved
+   ?`English render and Episode ${episodeNumber} script located and validated.`
+   :isEpisodeFiveTranscript
+    ?'Local transcript preflight found a material difference between the supplied script and the rendered dialogue around 41.8–47.6 seconds. Confirm that the render is the source of truth before spending ElevenLabs credits.'
+    :'',
+  approvedAt:sourceApproved?new Date().toISOString():null,
+ };
+});
 const db=()=>{const value=(env as unknown as {DB?:D1}).DB;if(!value)throw Error('Production storage is unavailable.');return value};
 
 async function ensureTable(database:D1){
@@ -36,7 +49,7 @@ async function ensureTable(database:D1){
 }
 
 function decode(row:Record<string,unknown>){
- let stages:Stage[]=initialStages;
+ let stages:Stage[]=stagesFor(Number(row.episode_number));
  try{const parsed=JSON.parse(String(row.stages)) as Stage[];if(Array.isArray(parsed))stages=parsed}catch{}
  return {
   id:String(row.id),series:String(row.series),episodeNumber:Number(row.episode_number),title:String(row.title),
@@ -47,19 +60,24 @@ function decode(row:Record<string,unknown>){
 }
 
 async function loadOrSeed(database:D1,owner:string){
- let row=await database.prepare(`SELECT * FROM production_episodes WHERE owner_id=? ORDER BY updated_at DESC LIMIT 1`).bind(owner).first();
- if(row)return row;
- const id=crypto.randomUUID(),now=Date.now();
- const sourceMetadata={sha256:'be51bc4197e1040480fcc82f8ed7ed7b7ae3fa16d728ea365130a9702b4ac9d2',video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:242};
- await database.prepare(`INSERT INTO production_episodes (id,owner_id,series,episode_number,title,drive_folder_id,drive_file_id,source_filename,duration_seconds,source_metadata,stages,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-  .bind(id,owner,'Series 2',4,"Her Mother's Land",'1GvYcTTmbHOUEQDU0jutZr16h8Rz7scbC','1tsXT0nTW7MYNg7sNwAFiDowkRBtjlEh2','Season 2 Espisode 4.mp4',69.6,JSON.stringify(sourceMetadata),JSON.stringify(initialStages),now,now).run();
- row=await database.prepare(`SELECT * FROM production_episodes WHERE id=?`).bind(id).first();
- return row;
+ const existing=await database.prepare(`SELECT episode_number FROM production_episodes WHERE owner_id=?`).bind(owner).all();
+ const numbers=new Set((existing.results??[]).map(row=>Number(row.episode_number)));
+ const now=Date.now();
+ const seeds=[
+  {episodeNumber:4,title:"Her Mother's Land",driveFileId:'1tsXT0nTW7MYNg7sNwAFiDowkRBtjlEh2',sourceFilename:'Season 2 Espisode 4.mp4',durationSeconds:69.6,sourceMetadata:{sha256:'be51bc4197e1040480fcc82f8ed7ed7b7ae3fa16d728ea365130a9702b4ac9d2',video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:242}},
+  {episodeNumber:5,title:'What He Took',driveFileId:'14cArdH4EzhSHUpeUC138AQp7CZWag8hu',sourceFilename:'Season 2 Episode 5.mp4',durationSeconds:58.4,sourceMetadata:{video:'H.264 · 1080 × 1920',audio:'AAC',scriptWords:131,transcriptPreflight:'needs_attention'}},
+ ];
+ for(const seed of seeds){
+  if(numbers.has(seed.episodeNumber))continue;
+  await database.prepare(`INSERT INTO production_episodes (id,owner_id,series,episode_number,title,drive_folder_id,drive_file_id,source_filename,duration_seconds,source_metadata,stages,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+   .bind(crypto.randomUUID(),owner,'Series 2',seed.episodeNumber,seed.title,'1GvYcTTmbHOUEQDU0jutZr16h8Rz7scbC',seed.driveFileId,seed.sourceFilename,seed.durationSeconds,JSON.stringify(seed.sourceMetadata),JSON.stringify(stagesFor(seed.episodeNumber)),now,now).run();
+ }
+ return database.prepare(`SELECT * FROM production_episodes WHERE owner_id=? ORDER BY episode_number DESC`).bind(owner).all();
 }
 
 export async function GET(request:Request){
  const owner=authenticatedUser(request);if(!owner)return json({error:'Sign in to view production episodes.'},401);
- try{const database=db();await ensureTable(database);const row=await loadOrSeed(database,owner);return row?json({episode:decode(row)}):json({error:'Could not create the test episode.'},503)}catch{return json({error:'Production workflow could not be loaded.'},503)}
+ try{const database=db();await ensureTable(database);const result=await loadOrSeed(database,owner);const episodes=(result.results??[]).map(decode);return episodes.length?json({episode:episodes[0],episodes}):json({error:'Could not create the production episodes.'},503)}catch{return json({error:'Production workflow could not be loaded.'},503)}
 }
 
 export async function PATCH(request:Request){
