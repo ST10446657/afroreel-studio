@@ -166,3 +166,15 @@ Add the external media worker, automatic WAV/SRT/silent-MP4 generation, synchron
 Add Google Drive discovery, ElevenLabs jobs, Music 2.5 generation, Bunny upload and validation, AfroReel HLS linking, and social range exports.
 
 Each phase must be tested against one complete episode and compared with a previously approved manual delivery before becoming the default production path.
+
+## Existing Music Supervisor migration package
+
+The private `AfroReel AI Music Supervisor` migration bundle (version 0.1.3, 15 October 2026) provides three validated specifications that should be reused rather than rewritten:
+
+- `music-supervisor`: dialogue-first emotional scoring maps and standalone ElevenLabs Music prompts with exact timestamp sections and a verified limit of 3,999 Unicode/UTF-16 units.
+- `multilingual-mp4`: FFmpeg mapping, language metadata, default-track behavior, embedded selectable subtitles, fast-start packaging, and verification for Bunny.
+- `separate-video-export`: full and ranged per-language MP4 exports, caption timing adjustment, and the approved caption appearance.
+
+The approved 1080 x 1920 caption specification uses Nimbus Sans Bold at 42 px, white text, a rounded black background at approximately 61% opacity, 30 px horizontal padding, 19 px vertical padding, a 23 px radius, a maximum line width of 970 px, and a box bottom at y=1548. English captions apply to English, Zulu, Hausa, and Swahili exports; French exports use French captions.
+
+The migration archive is an implementation reference and must remain private. It contains no service credentials, media, Drive authorization, or runtime binaries. The Nimbus Sans Bold font file is not included and must be provided or replaced with a disclosed metrically similar typeface.
