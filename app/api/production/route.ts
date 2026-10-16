@@ -66,6 +66,7 @@ async function loadOrSeed(database:D1,owner:string){
  const seeds=[
   {episodeNumber:4,title:"Her Mother's Land",driveFileId:'1tsXT0nTW7MYNg7sNwAFiDowkRBtjlEh2',sourceFilename:'Season 2 Espisode 4.mp4',durationSeconds:69.6,sourceMetadata:{sha256:'be51bc4197e1040480fcc82f8ed7ed7b7ae3fa16d728ea365130a9702b4ac9d2',video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:242}},
   {episodeNumber:5,title:'What He Took',driveFileId:'14cArdH4EzhSHUpeUC138AQp7CZWag8hu',sourceFilename:'Season 2 Episode 5.mp4',durationSeconds:58.4,sourceMetadata:{video:'H.264 · 1080 × 1920',audio:'AAC',scriptWords:131,transcriptPreflight:'needs_attention'}},
+  {episodeNumber:6,title:'Father and Son',driveFileId:'1oq8fbc1kb4jbYz6MyHMr-jse1uanDSG4',sourceFilename:'Season 2 Episode 6.mp4',durationSeconds:64.0,sourceMetadata:{video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:158,transcriptPreflight:'passed_local_review'}},
  ];
  for(const seed of seeds){
   if(numbers.has(seed.episodeNumber))continue;

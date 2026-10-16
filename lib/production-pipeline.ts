@@ -18,7 +18,7 @@ export const bunnyPackageFiles = [
 
 export const creditPolicy = {
   referenceEpisode: 4,
-  firstAutomatedEpisode: 5,
+  firstAutomatedEpisode: 6,
   requireTranscriptApproval: true,
   requireZuluApproval: true,
   automaticPaidRetries: 0,
