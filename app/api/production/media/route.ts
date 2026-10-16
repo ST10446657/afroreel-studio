@@ -33,6 +33,6 @@ export async function GET(request:Request){
  if(!job?.project_id||!job.language_id)return fail('Completed dubbed audio was not found.',404);
  const response=await fetch(`https://api.elevenlabs.io/v1/dubbing/project/${encodeURIComponent(String(job.project_id))}/language/${encodeURIComponent(String(job.language_id))}`,{headers:{'xi-api-key':apiKey()}});
  const data=await response.json().catch(()=>({})) as {status?:string;outputs?:{lossless_audio?:string}};
- if(!response.ok||data.status!=='dubbed'||!data.outputs?.lossless_audio)return fail('Dubbed audio is not ready.',409);
+ if(!response.ok||!['completed','dubbed'].includes(data.status||'')||!data.outputs?.lossless_audio)return fail('Dubbed audio is not ready.',409);
  return relay(data.outputs.lossless_audio,request,'audio/flac');
 }
