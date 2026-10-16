@@ -21,7 +21,7 @@ function dialogue(script:string){
  for(const line of lines){
   if(!line){expecting=false;continue}
   if(/^\(.*\)$/.test(line))continue;
-  const cue=/^[A-Z][A-Z .'’-]{1,35}$/.test(line)&&!line.startsWith('INT.')&&!line.startsWith('EXT.')&&!line.startsWith('EPISODE')&&!line.startsWith('CUT TO');
+  const cue=/^[A-Z][A-Z '\-]{1,30}(?: \([^)]*\))?$/.test(line)&&!line.startsWith('EPISODE')&&!line.startsWith('CUT TO');
   if(cue){expecting=true;continue}
   if(expecting){spoken.push(line);expecting=false}
  }
