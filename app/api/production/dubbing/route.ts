@@ -15,6 +15,22 @@ async function ensureTable(db:D1){await db.prepare(`CREATE TABLE IF NOT EXISTS p
  UNIQUE(owner_id,episode_id,language)
 )`).run()}
 
+export async function GET(request:Request){
+ const owner=authenticatedUser(request);if(!owner)return json({error:'Sign in to check the dubbing pilot.'},401);
+ const episodeId=new URL(request.url).searchParams.get('episodeId');if(!episodeId)return json({error:'Episode is required.'},400);
+ const key=(env as unknown as {ELEVENLABS_API_KEY?:string}).ELEVENLABS_API_KEY;if(!key)return json({error:'ElevenLabs is not configured.'},503);
+ const db=database();await ensureTable(db);
+ const job=await db.prepare(`SELECT * FROM production_dubbing_jobs WHERE owner_id=? AND episode_id=? AND language='zu'`).bind(owner,episodeId).first();
+ if(!job)return json({job:null});
+ let status=String(job.status),error=job.error?String(job.error):null;
+ if(job.project_id&&job.language_id){
+  const response=await fetch(`https://api.elevenlabs.io/v1/dubbing/project/${encodeURIComponent(String(job.project_id))}/language/${encodeURIComponent(String(job.language_id))}`,{headers:{'xi-api-key':key}});
+  const data=await response.json().catch(()=>({})) as {status?:string;error?:{message?:string}|string};
+  if(response.ok&&data.status){status=data.status;error=typeof data.error==='string'?data.error:data.error?.message??null;await db.prepare(`UPDATE production_dubbing_jobs SET status=?,error=?,updated_at=? WHERE id=?`).bind(status,error,Date.now(),String(job.id)).run()}
+ }
+ return json({job:{id:String(job.id),status,projectId:job.project_id?String(job.project_id):null,languageId:job.language_id?String(job.language_id):null,language:'zu',cloningStrength:0,error}});
+}
+
 export async function POST(request:Request){
  const owner=authenticatedUser(request);if(!owner)return json({error:'Sign in to start a dubbing pilot.'},401);
  const body=await request.json().catch(()=>null) as {episodeId?:string;confirm?:boolean}|null;
