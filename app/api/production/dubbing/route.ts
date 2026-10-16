@@ -19,6 +19,12 @@ async function ensureTable(db:D1){await db.prepare(`CREATE TABLE IF NOT EXISTS p
 )`).run()}
 const directSource=(episode:Record<string,unknown>)=>{try{const metadata=JSON.parse(String(episode.source_metadata)) as {videoUrl?:string};if(metadata.videoUrl)return metadata.videoUrl}catch{}return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(String(episode.drive_file_id))}&export=download&confirm=t`};
 const stages=(episode:Record<string,unknown>)=>{try{return JSON.parse(String(episode.stages)) as Array<{key:string;status:string}>}catch{return []}};
+const projectKey=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'');
+async function latestProject(key:string,episode:Record<string,unknown>){
+ const response=await fetch('https://api.elevenlabs.io/v1/dubbing/project?page_size=100&sort_direction=DESCENDING',{headers:{'xi-api-key':key}});if(!response.ok)return null;
+ const data=await response.json().catch(()=>({})) as {projects?:Array<{project_id?:string;reference?:string;media?:{filename?:string}}>;dubbing_projects?:Array<{project_id?:string;reference?:string;media?:{filename?:string}}>};const projects=data.projects??data.dubbing_projects??[],filename=String(episode.source_filename),number=Number(episode.episode_number);
+ return projects.find(item=>projectKey(item.media?.filename??'')===projectKey(filename))??projects.find(item=>new RegExp(`(?:episode|ep)\\s*${number}\\b`,'i').test(`${item.media?.filename??''} ${item.reference??''}`))??null;
+}
 
 export async function GET(request:Request){
  const owner=authenticatedUser(request);if(!owner)return json({error:'Sign in to check dubbing.'},401);
@@ -50,7 +56,8 @@ export async function POST(request:Request){
  const episode=await db.prepare(`SELECT * FROM production_episodes WHERE id=? AND owner_id=?`).bind(body.episodeId,owner).first();if(!episode)return json({error:'Production episode not found.'},404);
  try{const metadata=JSON.parse(String(episode.source_metadata)) as {renderMissing?:boolean};if(metadata.renderMissing||!episode.drive_file_id)return json({error:`Upload ${String(episode.source_filename)} before starting the Zulu pilot.`},409)}catch{}
  const existing=await db.prepare(`SELECT * FROM production_dubbing_jobs WHERE owner_id=? AND episode_id=? AND language=?`).bind(owner,body.episodeId,language).first();
- if(existing)return json({job:{id:String(existing.id),status:String(existing.status),projectId:existing.project_id?String(existing.project_id):null,languageId:existing.language_id?String(existing.language_id):null,language,cloningStrength:configuration.strength},duplicatePrevented:true});
+ if(existing&&String(existing.status)!=='failed')return json({job:{id:String(existing.id),status:String(existing.status),projectId:existing.project_id?String(existing.project_id):null,languageId:existing.language_id?String(existing.language_id):null,language,cloningStrength:configuration.strength},duplicatePrevented:true});
+ if(existing)await db.prepare(`DELETE FROM production_dubbing_jobs WHERE id=?`).bind(String(existing.id)).run();
  const id=crypto.randomUUID(),now=Date.now();let projectId:string|null=null;
  await db.prepare(`INSERT INTO production_dubbing_jobs (id,owner_id,episode_id,episode_number,language,cloning_strength,project_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(id,owner,body.episodeId,Number(episode.episode_number),language,configuration.strength,null,language==='zu'?'creating_project':'checking_gate',now,now).run();
  if(language==='zu'){
@@ -60,6 +67,7 @@ export async function POST(request:Request){
  }else{
   const pilot=await db.prepare(`SELECT project_id,status FROM production_dubbing_jobs WHERE owner_id=? AND episode_id=? AND language='zu'`).bind(owner,body.episodeId).first();if(!pilot?.project_id){await db.prepare(`DELETE FROM production_dubbing_jobs WHERE id=?`).bind(id).run();return json({error:'Complete the Zulu pilot first.'},409)}
   const approved=stages(episode).find(stage=>stage.key==='zulu')?.status==='approved';if(!approved){await db.prepare(`DELETE FROM production_dubbing_jobs WHERE id=?`).bind(id).run();return json({error:'Approve the Zulu review before generating the remaining languages.'},409)}projectId=String(pilot.project_id);
+  const newest=await latestProject(key,episode);if(newest?.project_id&&newest.project_id!==projectId){projectId=newest.project_id;await db.prepare(`UPDATE production_dubbing_jobs SET project_id=?,updated_at=? WHERE owner_id=? AND episode_id=? AND language='zu'`).bind(projectId,Date.now(),owner,body.episodeId).run()}
  }
  await db.prepare(`UPDATE production_dubbing_jobs SET project_id=?,status='creating_language',updated_at=? WHERE id=?`).bind(projectId,Date.now(),id).run();
  try{const response=await fetch(`https://api.elevenlabs.io/v1/dubbing/project/${encodeURIComponent(projectId)}/language`,{method:'POST',headers:{'xi-api-key':key,'Content-Type':'application/json'},body:JSON.stringify({target_language:language,voice_settings:{cloning_strength:configuration.strength}})});const data=await response.json().catch(()=>({})) as {language_id?:string;status?:string};if(!response.ok||!data.language_id)throw Error(`${configuration.name} target creation failed (${response.status}).`);await db.prepare(`UPDATE production_dubbing_jobs SET language_id=?,status=?,updated_at=? WHERE id=?`).bind(data.language_id,data.status??'queued',Date.now(),id).run();return json({job:{id,status:data.status??'queued',projectId,languageId:data.language_id,language,cloningStrength:configuration.strength},duplicatePrevented:false},201)}catch(error){const message=error instanceof Error?error.message:`${configuration.name} could not be created.`;await db.prepare(`UPDATE production_dubbing_jobs SET status='failed',error=?,updated_at=? WHERE id=?`).bind(message,Date.now(),id).run();return json({error:message,jobId:id},502)}
