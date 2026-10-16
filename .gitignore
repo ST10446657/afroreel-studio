@@ -37,3 +37,6 @@ next-env.d.ts
 /outputs/
 /work/
 /.sites-runtime/
+
+# generated Sites packages
+.openai/*.tar.gz

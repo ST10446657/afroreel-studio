@@ -14,6 +14,62 @@ type Body={id?:string;stageKey?:string;status?:StageStatus;notes?:string};
 type CreateBody={series?:string;episodeNumber?:number;title?:string;videoUrl?:string;scriptText?:string};
 
 const stageKeys=['source','transcript','zulu','dubs','translations','music_prompt','music','audio','captions','package','bunny','afroreel'] as const;
+const episodeSixScript=`EPISODE 6 — FATHER AND SON
+EXT. UMLAZI STREET – DAY
+KHWEZI walks, phone in hand.
+A message appears from an UNKNOWN NUMBER.
+I'D LIKE TO SEE YOU. JUST YOU. — D
+Khwezi stops.
+Looks toward home.
+Then types.
+WHERE?
+
+EXT. QUIET CAFÉ / OUTDOOR SEATING – LATER
+DUMI waits alone.
+Khwezi approaches cautiously.
+Dumi stands.
+For a moment, neither knows what to do.
+Then Dumi smiles.
+Not Daniel's public smile.
+Something warmer.
+DUMI
+Khwezi.
+Hearing his name from his father's mouth lands.
+Khwezi sits.
+KHWEZI
+You remember me?
+Dumi almost laughs.
+DUMI
+You used to sleep with one shoe on.
+Khwezi looks at him.
+DUMI
+Your mother would take it off. You'd wake up screaming until I put it back.
+Khwezi can't help it—
+A small smile.
+Dumi sees it.
+His own smile fades with emotion.
+DUMI
+Look at you.
+Khwezi shifts, uncomfortable with the intimacy.
+KHWEZI
+Why didn't you come back?
+Dumi looks away.
+For once, no easy answer.
+DUMI
+I thought about it.
+KHWEZI
+For fifteen years?
+Dumi absorbs that.
+DUMI
+I don't expect you to forgive me.
+A beat.
+DUMI
+But there's a reason I couldn't come back.
+Khwezi waits.
+Dumi meets his eyes.
+DUMI
+Your mother hasn't told you everything.
+CUT TO BLACK.`;
 const stagesFor=(episodeNumber:number):Stage[]=>stageKeys.map((key,index)=>{
  const sourceApproved=index===0;
  const isEpisodeFiveTranscript=episodeNumber===5&&key==='transcript';
@@ -67,10 +123,16 @@ async function loadOrSeed(database:D1,owner:string){
  const seeds=[
   {episodeNumber:4,title:"Her Mother's Land",driveFileId:'1tsXT0nTW7MYNg7sNwAFiDowkRBtjlEh2',sourceFilename:'Season 2 Espisode 4.mp4',durationSeconds:69.6,sourceMetadata:{sha256:'be51bc4197e1040480fcc82f8ed7ed7b7ae3fa16d728ea365130a9702b4ac9d2',video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:242}},
   {episodeNumber:5,title:'What He Took',driveFileId:'14cArdH4EzhSHUpeUC138AQp7CZWag8hu',sourceFilename:'Season 2 Episode 5.mp4',durationSeconds:58.4,sourceMetadata:{video:'H.264 · 1080 × 1920',audio:'AAC',scriptWords:131,transcriptPreflight:'needs_attention'}},
-  {episodeNumber:6,title:'Father and Son',driveFileId:'1oq8fbc1kb4jbYz6MyHMr-jse1uanDSG4',sourceFilename:'Season 2 Episode 6.mp4',durationSeconds:64.0,sourceMetadata:{video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:158,transcriptPreflight:'passed_local_review'}},
+  {episodeNumber:6,title:'Father and Son',driveFileId:'1oq8fbc1kb4jbYz6MyHMr-jse1uanDSG4',sourceFilename:'Season 2 Episode 6.mp4',durationSeconds:64.0,sourceMetadata:{video:'H.264 · 1080 × 1920 · 30 fps',audio:'AAC · 48 kHz · stereo',scriptWords:158,scriptText:episodeSixScript,transcriptPreflight:'passed_local_review'}},
  ];
  for(const seed of seeds){
-  if(numbers.has(seed.episodeNumber))continue;
+  if(numbers.has(seed.episodeNumber)){
+   if(seed.episodeNumber===6){
+    const row=await database.prepare(`SELECT source_metadata FROM production_episodes WHERE owner_id=? AND episode_number=6`).bind(owner).first();
+    try{const metadata=JSON.parse(String(row?.source_metadata??'{}')) as Record<string,unknown>;if(!metadata.scriptText)await database.prepare(`UPDATE production_episodes SET source_metadata=?,updated_at=? WHERE owner_id=? AND episode_number=6`).bind(JSON.stringify({...metadata,scriptText:episodeSixScript}),now,owner).run()}catch{}
+   }
+   continue;
+  }
   await database.prepare(`INSERT INTO production_episodes (id,owner_id,series,episode_number,title,drive_folder_id,drive_file_id,source_filename,duration_seconds,source_metadata,stages,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
    .bind(crypto.randomUUID(),owner,'Series 2',seed.episodeNumber,seed.title,'1GvYcTTmbHOUEQDU0jutZr16h8Rz7scbC',seed.driveFileId,seed.sourceFilename,seed.durationSeconds,JSON.stringify(seed.sourceMetadata),JSON.stringify(stagesFor(seed.episodeNumber)),now,now).run();
  }
