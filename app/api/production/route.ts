@@ -11,6 +11,7 @@ type D1={prepare:(sql:string)=>D1Statement;batch:(statements:D1Statement[])=>Pro
 type StageStatus='locked'|'pending'|'in_progress'|'approved'|'needs_attention';
 type Stage={key:string;status:StageStatus;notes:string;approvedAt:string|null};
 type Body={id?:string;stageKey?:string;status?:StageStatus;notes?:string};
+type CreateBody={series?:string;episodeNumber?:number;title?:string;videoUrl?:string;scriptText?:string};
 
 const stageKeys=['source','transcript','zulu','dubs','translations','music_prompt','music','audio','captions','package','bunny','afroreel'] as const;
 const stagesFor=(episodeNumber:number):Stage[]=>stageKeys.map((key,index)=>{
@@ -79,6 +80,23 @@ async function loadOrSeed(database:D1,owner:string){
 export async function GET(request:Request){
  const owner=authenticatedUser(request);if(!owner)return json({error:'Sign in to view production episodes.'},401);
  try{const database=db();await ensureTable(database);const result=await loadOrSeed(database,owner);const episodes=(result.results??[]).map(decode);return episodes.length?json({episode:episodes[0],episodes}):json({error:'Could not create the production episodes.'},503)}catch{return json({error:'Production workflow could not be loaded.'},503)}
+}
+
+export async function POST(request:Request){
+ const owner=authenticatedUser(request);if(!owner)return json({error:'Sign in to add a production episode.'},401);
+ const body=await request.json().catch(()=>null) as CreateBody|null;
+ const episodeNumber=Number(body?.episodeNumber),videoUrl=body?.videoUrl?.trim()??'',scriptText=body?.scriptText?.trim()??'';
+ if(!Number.isInteger(episodeNumber)||episodeNumber<1||!body?.title?.trim()||!scriptText||!/^https:\/\//i.test(videoUrl))return json({error:'Episode number, title, HTTPS video URL and script are required.'},400);
+ try{
+  const database=db();await ensureTable(database);
+  const duplicate=await database.prepare(`SELECT id FROM production_episodes WHERE owner_id=? AND series=? AND episode_number=?`).bind(owner,body.series?.trim()||'Series 2',episodeNumber).first();
+  if(duplicate)return json({error:'That episode already exists in this series.'},409);
+  const driveMatch=videoUrl.match(/\/file\/d\/([^/?]+)/)||videoUrl.match(/[?&]id=([^&]+)/);const driveFileId=driveMatch?.[1]??videoUrl;
+  const id=crypto.randomUUID(),now=Date.now();const stages=stagesFor(episodeNumber);stages[0]={...stages[0],notes:'Video and script supplied. Ready for transcript preflight.'};
+  const metadata={videoUrl,scriptText,scriptWords:scriptText.split(/\s+/).filter(Boolean).length,transcriptPreflight:'pending'};
+  await database.prepare(`INSERT INTO production_episodes (id,owner_id,series,episode_number,title,drive_folder_id,drive_file_id,source_filename,duration_seconds,source_metadata,stages,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id,owner,body.series?.trim()||'Series 2',episodeNumber,body.title.trim(),'custom',driveFileId,`Episode ${episodeNumber} source`,0,JSON.stringify(metadata),JSON.stringify(stages),now,now).run();
+  const row=await database.prepare(`SELECT * FROM production_episodes WHERE id=? AND owner_id=?`).bind(id,owner).first();return json({episode:decode(row!)},201);
+ }catch{return json({error:'The production episode could not be created.'},503)}
 }
 
 export async function PATCH(request:Request){
