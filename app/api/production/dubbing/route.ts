@@ -48,6 +48,7 @@ export async function POST(request:Request){
  if(!body?.episodeId||body.confirm!==true||!configuration)return json({error:'Episode, language and explicit confirmation are required.'},400);
  const key=apiKey(),db=database();await ensureTable(db);
  const episode=await db.prepare(`SELECT * FROM production_episodes WHERE id=? AND owner_id=?`).bind(body.episodeId,owner).first();if(!episode)return json({error:'Production episode not found.'},404);
+ try{const metadata=JSON.parse(String(episode.source_metadata)) as {renderMissing?:boolean};if(metadata.renderMissing||!episode.drive_file_id)return json({error:`Upload ${String(episode.source_filename)} before starting the Zulu pilot.`},409)}catch{}
  const existing=await db.prepare(`SELECT * FROM production_dubbing_jobs WHERE owner_id=? AND episode_id=? AND language=?`).bind(owner,body.episodeId,language).first();
  if(existing)return json({job:{id:String(existing.id),status:String(existing.status),projectId:existing.project_id?String(existing.project_id):null,languageId:existing.language_id?String(existing.language_id):null,language,cloningStrength:configuration.strength},duplicatePrevented:true});
  const id=crypto.randomUUID(),now=Date.now();let projectId:string|null=null;
