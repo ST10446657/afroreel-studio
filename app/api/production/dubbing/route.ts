@@ -27,18 +27,18 @@ export async function GET(request:Request){
  const key=apiKey(),db=database();await ensureTable(db);
  const job=await db.prepare(`SELECT * FROM production_dubbing_jobs WHERE owner_id=? AND episode_id=? AND language=?`).bind(owner,episodeId,language).first();
  if(!job)return json({job:null});
- let status=String(job.status),error=job.error?String(job.error):null,sourceTranscript:null|{text:string;segments:number;containsExpectedNames:boolean;unexpectedName:string|null}=null;
+ let status=String(job.status),error=job.error?String(job.error):null,outputUrl:string|null=null,sourceTranscript:null|{text:string;segments:number;containsExpectedNames:boolean;unexpectedName:string|null}=null;
  if(job.project_id&&job.language_id){
   const response=await fetch(`https://api.elevenlabs.io/v1/dubbing/project/${encodeURIComponent(String(job.project_id))}/language/${encodeURIComponent(String(job.language_id))}`,{headers:{'xi-api-key':key}});
-  const data=await response.json().catch(()=>({})) as {status?:string;error?:{message?:string}|string};
-  if(response.ok&&data.status){status=data.status;error=typeof data.error==='string'?data.error:data.error?.message??null;await db.prepare(`UPDATE production_dubbing_jobs SET status=?,error=?,updated_at=? WHERE id=?`).bind(status,error,Date.now(),String(job.id)).run()}
+  const data=await response.json().catch(()=>({})) as {status?:string;error?:{message?:string}|string;outputs?:{lossless_audio?:string}};
+  if(response.ok&&data.status){status=data.status;error=typeof data.error==='string'?data.error:data.error?.message??null;outputUrl=data.outputs?.lossless_audio??null;await db.prepare(`UPDATE production_dubbing_jobs SET status=?,error=?,updated_at=? WHERE id=?`).bind(status,error,Date.now(),String(job.id)).run()}
  }
  if(job.project_id){
   const transcriptResponse=await fetch(`https://api.elevenlabs.io/v1/dubbing/project/${encodeURIComponent(String(job.project_id))}/transcript`,{headers:{'xi-api-key':key}});
   const transcript=await transcriptResponse.json().catch(()=>({})) as {segments?:Array<{text?:string}>};
   if(transcriptResponse.ok&&Array.isArray(transcript.segments)){const text=transcript.segments.map(segment=>segment.text??'').join(' ');sourceTranscript={text,segments:transcript.segments.length,containsExpectedNames:/\bKhwezi\b/i.test(text),unexpectedName:/\bQuasie\b/i.test(text)?'Quasie':null}}
  }
- return json({job:{id:String(job.id),status,projectId:job.project_id?String(job.project_id):null,languageId:job.language_id?String(job.language_id):null,language,cloningStrength:languages[language].strength,error},sourceTranscript});
+ return json({job:{id:String(job.id),status,projectId:job.project_id?String(job.project_id):null,languageId:job.language_id?String(job.language_id):null,language,cloningStrength:languages[language].strength,error,outputUrl},sourceTranscript});
 }
 
 export async function POST(request:Request){
