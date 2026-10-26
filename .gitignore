@@ -28,6 +28,7 @@ yarn-error.log*
 
 # local environment
 .env*
+!.env.example
 
 # deployment and generated files
 .vercel
@@ -37,6 +38,8 @@ next-env.d.ts
 /outputs/
 /work/
 /.sites-runtime/
+/.sites/
+/tsconfig.tsbuildinfo
 
 # generated Sites packages
 .openai/*.tar.gz

@@ -1,6 +1,23 @@
 # AfroReel Studio
 
-AfroReel Studio is the scheduling and analytics dashboard for AfroReel's English, Zulu, Hausa, Swahili and French social accounts. It supports platform-specific copy, video previews, Google Drive imports and local uploads, private connection tests, scheduled background publishing, and social analytics.
+AfroReel Studio is a multilingual content operations platform for AfroReel's English, Zulu, Hausa, Swahili and French brands. It combines cross-platform scheduling, background publishing, social and website-funnel analytics, and a guarded AI-assisted post-production workflow in one dashboard.
+
+The project was built for a real independent media workflow spanning Facebook, Instagram, TikTok and YouTube. It focuses on the practical problems that appear after a prototype: account-specific credentials, direct media delivery, platform-specific copy, scheduled execution when a laptop is offline, per-target failure reporting, transcript QA and human approval of paid AI generations.
+
+## Highlights
+
+- Five language workspaces with isolated social destinations and credentials
+- Facebook, Instagram, TikTok and YouTube publishing from one plan
+- Separate YouTube title/description and platform-specific captions
+- Direct media URLs, Google Drive imports, local uploads and post previews
+- Drafts, private dry runs, immediate publishing and scheduled background dispatch
+- Cloudflare scheduled worker, so due posts do not depend on an open browser
+- Per-platform readiness checks, diagnostics and result tracking
+- Social metrics and a full attribution funnel from views to episode watching and signup
+- ElevenLabs dubbing intake, transcript comparison, translation review and music generation stages
+- Cloudflare D1 schema and migrations committed with the source
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design and [PORTFOLIO.md](PORTFOLIO.md) for the problem, contribution, technical decisions and lessons learned.
 
 ## Local setup
 
